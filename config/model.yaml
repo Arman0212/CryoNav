@@ -1,0 +1,51 @@
+# =============================================================================
+# CryoNav — Model Configuration
+# U-Net architecture, training hyperparameters, loss function settings
+# =============================================================================
+
+architecture:
+  name: "UNet"
+  version: "v1"
+  # Input: K days × (SIC + n_drivers) + static channels
+  input_window: 7
+  sic_channels: 1
+  driver_channels: 7   # u10, v10, t2m, msl, sst, wind_speed, wind_div
+  static_channels: 3   # dist_to_coast, bathy, land_mask
+  derived_channels: 5   # sic_anomaly, sic_tend_3d, sic_tend_7d, sin_doy, cos_doy
+  # Total input channels = 7 * (1 + 7 + 5) + 3 = 94
+  output_channels: 14   # lead days 1–14
+  
+  encoder_channels: [32, 64, 128, 256]
+  decoder_channels: [128, 64, 32]
+  num_down_blocks: 4
+  num_up_blocks: 4
+  norm: "GroupNorm"
+  num_groups: 8
+  activation: "GELU"
+  dropout: 0.1
+  output_activation: "sigmoid"
+
+training:
+  batch_size: 4
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  scheduler: "CosineAnnealingLR"
+  scheduler_T_max: 50
+  epochs: 50
+  early_stopping_patience: 10
+  gradient_clip: 1.0
+  device: "mps"   # Apple Silicon; override to "cuda" or "cpu" as needed
+
+loss:
+  l1_weight: 1.0
+  bce_weight: 0.3
+  ice_edge_threshold: 0.15   # 15% SIC defines the ice edge
+  miz_upweight: true
+  # MIZ: cells where climatological SIC variance > 0.05
+  miz_variance_threshold: 0.05
+  miz_weight_factor: 3.0
+
+augmentation:
+  # No spatial augmentation (grid is geographic)
+  temporal_jitter: false
+  all_seasons: true

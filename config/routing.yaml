@@ -1,0 +1,107 @@
+# =============================================================================
+# CryoNav — Routing Configuration
+# Speed-in-ice curve, fuel model, POLARIS-style risk, cost weights
+# =============================================================================
+
+speed_model:
+  # v(SIC) = v_open × (1 − (SIC / SIC_block)^p) for SIC < SIC_block
+  # v(SIC) = 0 for SIC >= SIC_block
+  v_open_kn: 14.0
+  sic_block: 0.9       # impassable threshold for PC6/IA Super
+  power_exponent: 2.0
+
+fuel_model:
+  # Open-water fuel rate: a + b*v + c*v^3 (tonnes/hour)
+  # Ice resistance adds: d * SIC * (1 + thickness_factor)
+  open_water_coeffs:
+    a: 0.5    # base consumption (t/h)
+    b: 0.02   # linear term
+    c: 0.0001 # cubic term
+  ice_resistance_coeff: 0.8   # additional t/h per unit SIC
+  thickness_factor: 0.5       # proxy multiplier (illustrative)
+
+polaris:
+  # Simplified POLARIS RIO (Risk Indexing Outcome) table
+  # Risk Index Value by ice concentration band and vessel class (PC6)
+  # Positive = acceptable, Negative = elevated risk, -∞ = no-go
+  concentration_bands:
+    - {sic_max: 0.1, riv: 3}
+    - {sic_max: 0.3, riv: 2}
+    - {sic_max: 0.5, riv: 1}
+    - {sic_max: 0.7, riv: 0}
+    - {sic_max: 0.8, riv: -1}
+    - {sic_max: 0.9, riv: -3}
+    - {sic_max: 1.0, riv: -99}  # no-go
+
+cost_weights:
+  # Default (balanced) weights — exposed as sliders in the UI
+  w_time: 1.0
+  w_fuel: 0.5
+  w_risk: 2.0
+
+constraints:
+  min_depth_m: 15.0           # minimum bathymetry (ship draft + margin)
+  berg_risk_cutoff: 0.3       # probability above which cell is blocked
+  max_sic_traversal: 0.9      # matches sic_block
+
+search:
+  connectivity: 16             # 8 or 16 connected grid
+  smoothing: true              # string-pulling post-process
+  max_iterations: 500000       # safety limit for A*
+
+alternatives:
+  profiles:
+    great_circle:
+      name: "Great Circle (ignores ice)"
+      w_time: 1.0
+      w_fuel: 0.0
+      w_risk: 0.0
+      ignore_ice: true
+    min_ice:
+      name: "Minimum Ice Exposure"
+      w_time: 0.1
+      w_fuel: 0.1
+      w_risk: 5.0
+    min_time:
+      name: "Minimum Time"
+      w_time: 5.0
+      w_fuel: 0.1
+      w_risk: 0.5
+    balanced:
+      name: "Balanced (Recommended)"
+      w_time: 1.0
+      w_fuel: 0.5
+      w_risk: 2.0
+    persistence_route:
+      name: "Today's Ice Route"
+      w_time: 1.0
+      w_fuel: 0.5
+      w_risk: 2.0
+      use_persistence: true
+
+berg_drift:
+  # Physical constants
+  rho_air: 1.225          # kg/m³
+  rho_water: 1027.0       # kg/m³
+  rho_ice: 917.0          # kg/m³
+  C_air: 1.3              # air drag coefficient
+  C_water: 0.9            # water drag coefficient
+  omega: 7.2921e-5        # Earth rotation rate (rad/s)
+  g: 9.81                 # gravitational acceleration (m/s²)
+  
+  # Tabular berg geometry defaults
+  default_length_m: 1000.0
+  default_width_m: 600.0
+  freeboard_draft_ratio: 0.2   # 1:5 freeboard:draft
+  default_thickness_m: 250.0
+  
+  # Integration
+  dt_seconds: 3600        # 1-hour time step
+  method: "RK4"
+  
+  # Sea-ice coupling
+  sic_lock_threshold: 0.7  # SIC above which berg is locked to pack
+  
+  # Ensemble
+  n_ensemble: 50
+  perturbation_fraction: 0.2   # ±20% on drag coeffs and forcing

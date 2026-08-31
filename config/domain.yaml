@@ -1,0 +1,76 @@
+# =============================================================================
+# CryoNav — Domain Configuration
+# Every script reads this file. No magic numbers anywhere else in the codebase.
+# =============================================================================
+
+region:
+  name: "Indian Ocean Sector, Southern Ocean"
+  lon_min: -20.0    # degrees East
+  lon_max: 120.0
+  lat_min: -78.0    # degrees North (negative = South)
+  lat_max: -50.0
+
+projection:
+  name: "NSIDC South Polar Stereographic"
+  epsg: 3412
+  # CDR products use EPSG:3976 internally; we match the native 25 km grid
+  resolution_km: 25
+  # Working array after subsetting to domain: ~200 x 180 cells
+  grid_shape: [200, 180]
+
+time:
+  step: "daily"
+  start_date: "1991-01-01"
+  end_date: "2024-12-31"
+  forecast_horizon_days: 14
+  input_window_days: 7
+
+splits:
+  train: ["1991-01-01", "2015-12-31"]
+  val: ["2016-01-01", "2018-12-31"]
+  test: ["2019-01-01", "2024-12-31"]
+
+held_out_demo_dates:
+  - "2019-01-15"
+  - "2021-02-10"
+  - "2023-01-20"
+
+season:
+  demo_months: [11, 12, 1, 2, 3]  # Nov–Mar austral summer
+
+stations:
+  bharati:
+    name: "Bharati Station"
+    location: "Larsemann Hills, Prydz Bay"
+    lat: -69.40
+    lon: 76.20
+  maitri:
+    name: "Maitri Station"
+    location: "Princess Astrid Coast / India Bay"
+    lat: -70.00
+    lon: 11.50
+
+origins:
+  cape_town:
+    name: "Cape Town"
+    lat: -33.92
+    lon: 18.42
+  mid_ocean_waypoint:
+    name: "Mid-ocean waypoint (55°S)"
+    lat: -55.00
+    lon: 76.00
+
+ship:
+  class: "Polar Class 6 / IA Super"
+  name: "Ice-strengthened research vessel"
+  open_water_speed_kn: 14.0
+  draft_m: 8.5
+  beam_m: 20.0
+
+paths:
+  raw_data: "data/raw"
+  interim_data: "data/interim"
+  processed_data: "data/processed"
+  zarr_cube: "data/processed/antarctic_cube.zarr"
+  results: "results"
+  checkpoints: "results/checkpoints"

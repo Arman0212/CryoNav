@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryoNav — Antarctic Navigation Decision Support</title>
+    <meta name="description" content="AI-enabled sea-ice forecasting, iceberg trajectory prediction, and optimal route planning for Antarctic navigation.">
+    
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        /* Leaflet dark theme overrides */
+        .leaflet-container { background: #050a18; }
+        .leaflet-control-zoom a {
+            background: rgba(15, 26, 53, 0.9) !important;
+            color: #00d4ff !important;
+            border-color: rgba(0, 212, 255, 0.2) !important;
+        }
+        .leaflet-control-zoom a:hover {
+            background: rgba(0, 212, 255, 0.15) !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="header" id="app-header">
+            <div class="header-brand">
+                <div class="logo">❄</div>
+                <div>
+                    <h1>CryoNav</h1>
+                    <div class="subtitle">Antarctic Navigation Decision Support</div>
+                </div>
+            </div>
+            <div class="header-status">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span id="status-text">System Ready</span>
+                </div>
+                <div class="status-indicator" style="color: var(--text-muted);">
+                    <span>v1.0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- LEFT PANEL: Controls -->
+        <aside class="panel-left" id="panel-controls">
+            <!-- Voyage Setup -->
+            <div class="control-section animate-in">
+                <div class="section-header">
+                    <div class="section-icon">🚢</div>
+                    <span class="section-title">Voyage Setup</span>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="select-origin">Origin</label>
+                    <select class="form-select" id="select-origin">
+                        <option value="cape_town">Cape Town (33.9°S 18.4°E)</option>
+                        <option value="mid_ocean_waypoint">Mid-Ocean Waypoint (55°S 76°E)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="select-dest">Destination</label>
+                    <select class="form-select" id="select-dest">
+                        <option value="bharati">Bharati Station (69.4°S 76.2°E)</option>
+                        <option value="maitri">Maitri Station (70.0°S 11.5°E)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="input-date">Departure Date</label>
+                    <input class="form-input" type="date" id="input-date" value="2023-01-13">
+                </div>
+                
+                <button class="btn btn-primary btn-full" id="btn-route" onclick="computeRoute()">
+                    ⚡ Compute Routes
+                </button>
+            </div>
+
+            <!-- Cost Weights -->
+            <div class="control-section animate-in" style="animation-delay: 0.1s">
+                <div class="section-header">
+                    <div class="section-icon">⚖</div>
+                    <span class="section-title">Cost Weights</span>
+                </div>
+                
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span class="slider-label">⏱ Time Priority</span>
+                        <span class="slider-value" id="val-time">1.0</span>
+                    </div>
+                    <input type="range" id="slider-time" min="0" max="5" step="0.1" value="1.0"
+                           oninput="updateSlider('time', this.value)">
+                </div>
+                
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span class="slider-label">⛽ Fuel Priority</span>
+                        <span class="slider-value" id="val-fuel">0.5</span>
+                    </div>
+                    <input type="range" id="slider-fuel" min="0" max="5" step="0.1" value="0.5"
+                           oninput="updateSlider('fuel', this.value)">
+                </div>
+                
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span class="slider-label">⚠ Risk Priority</span>
+                        <span class="slider-value" id="val-risk">2.0</span>
+                    </div>
+                    <input type="range" id="slider-risk" min="0" max="5" step="0.1" value="2.0"
+                           oninput="updateSlider('risk', this.value)">
+                </div>
+            </div>
+
+            <!-- Layer Controls -->
+            <div class="control-section animate-in" style="animation-delay: 0.2s">
+                <div class="section-header">
+                    <div class="section-icon">🗂</div>
+                    <span class="section-title">Map Layers</span>
+                </div>
+                
+                <div class="layer-toggle" onclick="toggleLayer('forecast')">
+                    <span class="toggle-label">
+                        <span style="color: var(--ice-blue);">■</span> Forecast SIC
+                    </span>
+                    <div class="toggle-switch active" id="toggle-forecast"></div>
+                </div>
+                
+                <div class="layer-toggle" onclick="toggleLayer('observed')">
+                    <span class="toggle-label">
+                        <span style="color: var(--warning-orange);">■</span> Observed SIC
+                    </span>
+                    <div class="toggle-switch" id="toggle-observed"></div>
+                </div>
+                
+                <div class="layer-toggle" onclick="toggleLayer('difference')">
+                    <span class="toggle-label">
+                        <span style="color: var(--danger-red);">■</span> Forecast − Observed
+                    </span>
+                    <div class="toggle-switch" id="toggle-difference"></div>
+                </div>
+                
+                <div class="layer-toggle" onclick="toggleLayer('bergs')">
+                    <span class="toggle-label">
+                        <span style="color: var(--gold);">▲</span> Icebergs + Tracks
+                    </span>
+                    <div class="toggle-switch active" id="toggle-bergs"></div>
+                </div>
+                
+                <div class="layer-toggle" onclick="toggleLayer('routes')">
+                    <span class="toggle-label">
+                        <span style="color: var(--success-green);">━</span> Routes
+                    </span>
+                    <div class="toggle-switch active" id="toggle-routes"></div>
+                </div>
+                
+                <!-- SIC Colorbar -->
+                <div style="margin-top: 12px;">
+                    <div class="colorbar-labels">
+                        <span>0%</span>
+                        <span>SIC</span>
+                        <span>100%</span>
+                    </div>
+                    <div class="colorbar-gradient"></div>
+                </div>
+            </div>
+
+            <!-- Forecast Control -->
+            <div class="control-section animate-in" style="animation-delay: 0.3s">
+                <div class="section-header">
+                    <div class="section-icon">📡</div>
+                    <span class="section-title">Forecast</span>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Demo Dates</label>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" style="font-size:11px; padding:6px 10px;" onclick="setDemoDate('2019-01-15')">2019-01-15</button>
+                        <button class="btn btn-secondary" style="font-size:11px; padding:6px 10px;" onclick="setDemoDate('2021-02-10')">2021-02-10</button>
+                        <button class="btn btn-secondary" style="font-size:11px; padding:6px 10px;" onclick="setDemoDate('2023-01-20')">2023-01-20</button>
+                    </div>
+                </div>
+                
+                <button class="btn btn-secondary btn-full" onclick="loadForecast()" style="margin-top: 8px;">
+                    📊 Load Forecast
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAP -->
+        <main class="map-container">
+            <div id="map-canvas"></div>
+            
+            <div class="map-overlay">
+                <div class="map-chip" id="chip-coords">
+                    📍 Indian Ocean Sector · 20°W–120°E · 50°S–78°S
+                </div>
+                <div class="map-chip" id="chip-forecast-info" style="display:none;">
+                    🔮 Forecast: <span id="forecast-date-display"></span>
+                </div>
+            </div>
+            
+            <!-- Lead day slider -->
+            <div class="lead-slider-overlay">
+                <span class="lead-label">Lead Day</span>
+                <input type="range" id="slider-lead" min="1" max="14" step="1" value="7"
+                       oninput="updateLeadDay(this.value)" style="flex:1;">
+                <div class="lead-day-display" id="lead-day-value">7</div>
+                <button class="btn btn-secondary" style="padding:6px 12px;font-size:11px;" 
+                        onclick="animateLeadDays()" id="btn-animate">▶ Play</button>
+            </div>
+        </main>
+
+        <!-- RIGHT PANEL: Results -->
+        <aside class="panel-right" id="panel-results">
+            <!-- Key Metrics -->
+            <div class="control-section animate-in">
+                <div class="section-header">
+                    <div class="section-icon">📊</div>
+                    <span class="section-title">Route Metrics</span>
+                </div>
+                
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="metric-distance">—</div>
+                        <div class="metric-label">Distance (nm)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="metric-time">—</div>
+                        <div class="metric-label">Transit Time (h)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="metric-fuel">—</div>
+                        <div class="metric-label">Fuel (tonnes)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="metric-ice">—</div>
+                        <div class="metric-label">Ice Hours (>70%)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Route Comparison -->
+            <div class="control-section animate-in" style="animation-delay: 0.1s">
+                <div class="section-header">
+                    <div class="section-icon">⚓</div>
+                    <span class="section-title">Route Comparison</span>
+                </div>
+                
+                <div id="route-table-container">
+                    <table class="route-table">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left">Route</th>
+                                <th>Dist</th>
+                                <th>Time</th>
+                                <th>Ice h</th>
+                                <th>Fuel</th>
+                            </tr>
+                        </thead>
+                        <tbody id="route-table-body">
+                            <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">
+                                Compute routes to see comparison
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Rejection Reasons -->
+            <div class="control-section animate-in" style="animation-delay: 0.2s">
+                <div class="section-header">
+                    <div class="section-icon">📋</div>
+                    <span class="section-title">Route Analysis</span>
+                </div>
+                
+                <div id="rejection-container">
+                    <div style="color:var(--text-muted); font-size:12px; text-align:center; padding:16px;">
+                        Route analysis will appear here after computation
+                    </div>
+                </div>
+            </div>
+
+            <!-- Forecast Skill -->
+            <div class="control-section animate-in" style="animation-delay: 0.3s">
+                <div class="section-header">
+                    <div class="section-icon">🎯</div>
+                    <span class="section-title">Forecast Skill</span>
+                </div>
+                
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="metric-rmse">—</div>
+                        <div class="metric-label">RMSE (Day 7)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="metric-iiee">—</div>
+                        <div class="metric-label">IIEE (×10³ km²)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="metric-skill">—</div>
+                        <div class="metric-label">Skill vs DAP</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="metric-f1">—</div>
+                        <div class="metric-label">Edge F1 (15%)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Route Legend -->
+            <div class="control-section animate-in" style="animation-delay: 0.4s">
+                <div class="section-header">
+                    <div class="section-icon">🎨</div>
+                    <span class="section-title">Legend</span>
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#ff6b6b;"></div>
+                        Great Circle
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#4ecdc4;"></div>
+                        Minimum Ice
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#ffd93d;"></div>
+                        Minimum Time
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#2ed573; height:6px;"></div>
+                        Balanced (Recommended)
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#a55eea;"></div>
+                        Today's Ice Route
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#ffd700; width:10px; height:10px; border-radius:0; clip-path:polygon(50% 0%, 0% 100%, 100% 100%);"></div>
+                        Iceberg Position
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- FOOTER -->
+        <footer class="footer">
+            <span>CryoNav · Antarctic Decision Support System · NSIDC CDR v6 · ERA5 · GLORYS12</span>
+            <span>Indian Ocean Sector · 25 km Polar Stereographic · EPSG:3412</span>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

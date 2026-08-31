@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Data (large/generated — not tracked)
+data/raw/
+data/interim/
+data/processed/
+
+# Results (generated outputs)
+results/
+
+# OS / editor
+.DS_Store
+.vscode/
+.env
