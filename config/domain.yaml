@@ -15,8 +15,11 @@ projection:
   epsg: 3412
   # CDR products use EPSG:3976 internally; we match the native 25 km grid
   resolution_km: 25
-  # Working array after subsetting to domain: ~200 x 180 cells
-  grid_shape: [200, 180]
+  # Grid is an exact index slice of the native NSIDC-0051 332x316 southern
+  # hemisphere grid (rows 0-263, cols 96-315) — the smallest axis-aligned
+  # box in real EPSG:3412 space that fully contains lon -20..120, lat
+  # -50..-78. Never resampled: real SIC pixels are used as-is.
+  grid_shape: [264, 220]
 
 time:
   step: "daily"

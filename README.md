@@ -27,33 +27,42 @@ Indian Ocean sector of the Southern Ocean: 20°W–120°E, 50°S–78°S. NSIDC 
 
 ## Quick Start
 
+### 1. Setup Environment
 ```bash
-# 1. Create virtual environment
+git clone https://github.com/Arman0212/CryoNav.git
+cd CryoNav
 python3 -m venv .venv && source .venv/bin/activate
-
-# 2. Install dependencies
 pip install -r requirements.txt
-
-# 3. Build synthetic data cube (for development)
-PYTHONPATH=. python src/data/synthetic.py
-
-# 4. Run baselines
-PYTHONPATH=. python src/ice/baselines.py
-
-# 5. Train model (quick test)
-PYTHONPATH=. python src/ice/train.py --quick-test
-
-# 6. Run demo
-PYTHONPATH=. python scripts/run_demo.py --all
-
-# 7. Start the web application
-PYTHONPATH=. python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000
-# Open http://localhost:8000
 ```
 
-Or run everything at once:
+### 2. Dataset Setup (1-Command Download)
+The pre-compiled, 8-year analysis-ready Zarr data cube (`2017–2024`, 2,922 days across NASA SIC, ERA5, CMEMS, and BYU Icebergs) is hosted for 1-command setup:
+
 ```bash
-bash scripts/reproduce_all.sh
+# Option A: Download from Google Drive (Zero API keys required)
+python scripts/download_data.py --gdrive-id <GOOGLE_DRIVE_FILE_ID>
+
+# Option B: Verify existing local datasets
+python scripts/download_data.py --verify
+
+# Option C: Synthetic fallback mode (for offline/instant lightweight testing)
+PYTHONPATH=. python src/data/synthetic.py
+```
+
+### 3. Run Pipeline & Web Interface
+```bash
+# Run 4 Baselines (Persistence, Climatology, Linear Trend, Anomaly Persistence)
+PYTHONPATH=. python src/ice/baselines.py
+
+# Train U-Net Sea-Ice Forecast Model (MPS / CUDA / CPU)
+PYTHONPATH=. python src/ice/train.py
+
+# Run Complete Demo Pipeline
+PYTHONPATH=. python scripts/run_demo.py --all
+
+# Launch Interactive Polar Navigation Web App
+PYTHONPATH=. python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+# Open http://localhost:8000
 ```
 
 ---
