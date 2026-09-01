@@ -36,11 +36,11 @@ pip install -r requirements.txt
 ```
 
 ### 2. Dataset Setup (1-Command Download)
-The pre-compiled, 8-year analysis-ready Zarr data cube (`2017–2024`, 2,922 days across NASA SIC, ERA5, CMEMS, and BYU Icebergs) is hosted for 1-command setup:
+The pre-compiled, 8-year analysis-ready Zarr data cube (`2017–2024`, 2,922 days across NASA SIC, ERA5, CMEMS, and BYU Icebergs) is hosted on Google Drive (**5.4 GB compressed**) for 1-command setup:
 
 ```bash
 # Option A: Download from Google Drive (Zero API keys required)
-python scripts/download_data.py --gdrive-id <GOOGLE_DRIVE_FILE_ID>
+python scripts/download_data.py --gdrive-id 1EE-ggmzrbKDD69qupAt0ck8DhfhHytu8
 
 # Option B: Verify existing local datasets
 python scripts/download_data.py --verify
@@ -48,6 +48,21 @@ python scripts/download_data.py --verify
 # Option C: Synthetic fallback mode (for offline/instant lightweight testing)
 PYTHONPATH=. python src/data/synthetic.py
 ```
+
+#### Team Manual: Accessing the Dataset
+
+1. **Requirements.** `requests` (already in `requirements.txt`) is enough. For a more reliable large-file download, optionally install `gdown` first: `pip install gdown`.
+2. **Run the download command** shown above (Option A). It downloads `antarctic_cube_2017_2024.tar.gz` (~5.4 GB) into `data/processed/`, extracts it automatically, and prints a verification summary. This takes a while on a normal connection — expect several minutes, and make sure you have **at least ~12 GB free disk space** (compressed + extracted copies exist briefly side by side).
+3. **Confirm it worked** by running:
+   ```bash
+   python scripts/download_data.py --verify
+   ```
+   You should see the Zarr cube's dimensions, time coverage (`2017-01-01` to `2024-12-31`), and the tracked iceberg count.
+4. **If the download fails or hangs** (Google Drive occasionally rate-limits anonymous downloads of large files with a daily quota error):
+   - Re-run the same command — it usually succeeds on retry.
+   - Or install `gdown` (`pip install gdown`) and re-run; it handles Google's large-file "can't scan for viruses" confirmation page more reliably than the raw HTTP fallback.
+   - Or download the file manually by opening [the Drive link](https://drive.google.com/file/d/1EE-ggmzrbKDD69qupAt0ck8DhfhHytu8/view) in a browser, clicking through the virus-scan warning, saving `antarctic_cube_2017_2024.tar.gz` into `data/processed/`, then extracting it there (`tar -xzf antarctic_cube_2017_2024.tar.gz -C data/processed/`) so you end up with `data/processed/antarctic_cube.zarr`.
+5. **Don't commit the dataset to git.** It's intentionally excluded from the repo (GitHub rejects files over 100 MB) — it's distributed via this Drive link only.
 
 ### 3. Run Pipeline & Web Interface
 ```bash
