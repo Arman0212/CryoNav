@@ -129,7 +129,8 @@ class SeaIceDataset(Dataset):
         print(f"SeaIceDataset [{split}]: {len(self.valid_starts)} samples, "
               f"input={self.K}d, horizon={self.H}d (in-memory cached)")
     
-    def _normalize(self, arr: np.ndarray, var_name: str) -> np.ndarray:
+    @staticmethod
+    def _normalize(arr: np.ndarray, var_name: str) -> np.ndarray:
         """Standard normalization with robust NaN cleaning."""
         arr = np.nan_to_num(arr, nan=0.0)
         if var_name in ("sic", "sic_mask", "land_mask"):

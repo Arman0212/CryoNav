@@ -69,21 +69,32 @@ def run_demo(demo_date="2023-01-20", input_date="2023-01-13",
     forecast_dt = input_dt + np.timedelta64(lead_days, 'D')
     forecast_idx = int(np.argmin(np.abs(ds.time.values - forecast_dt)))
     
-    # Check for cached neural network forecast
-    cache_file = PROJECT_ROOT / "data" / "processed" / "demo_cache" / f"forecast_{demo_date}.npy"
-    if cache_file.exists():
-        sic_forecast_all = np.load(cache_file)
-        sic_forecast = sic_forecast_all[min(lead_days - 1, sic_forecast_all.shape[0] - 1)]
+    # The cached forecast is keyed by its init date -- the last day the model
+    # saw -- and entry [i] is valid at init + (i+1) days. Index by the actual
+    # gap to demo_date rather than assuming a fixed lead.
+    from src.ice.predict import load_cached_forecast, lead_index
+
+    sic_forecast_all = load_cached_forecast(input_date)
+    li = lead_index(input_date, demo_date)
+    if sic_forecast_all is not None and 0 <= li < sic_forecast_all.shape[0]:
+        sic_forecast = sic_forecast_all[li]
+        forecast_source = "model"
     else:
         sic_forecast_all = None
         sic_forecast = ds["sic"].values[forecast_idx]
+        forecast_source = "observed_fallback"
+        print(f"  WARNING: no cached forecast for init {input_date}; "
+              f"beats 2-4 use OBSERVED data, not a prediction.")
     
     beat2 = {
         "forecast_date": str(np.datetime64(ds.time.values[forecast_idx], 'D')),
         "lead_days": lead_days,
         "mean_sic": float(np.mean(sic_forecast[ocean_mask > 0.5])),
         "ice_extent_km2": int(np.sum((sic_forecast > 0.15) & (ocean_mask > 0.5)) * 625),
-        "message": f"Here is the model's forecast for {demo_date}.",
+        "source": forecast_source,
+        "message": (f"Here is the model's forecast for {demo_date}."
+                    if forecast_source == "model"
+                    else f"NO CACHED FORECAST -- showing observed SIC for {demo_date}."),
     }
     print(f"  Forecast date: {beat2['forecast_date']}")
     print(f"  Mean SIC: {beat2['mean_sic']:.3f}")
@@ -155,7 +166,7 @@ def run_demo(demo_date="2023-01-20", input_date="2023-01-13",
     # Build SIC field stack for the forecast horizon
     horizon = 14
     if sic_forecast_all is not None:
-        sic_fields = sic_forecast_all
+        sic_fields = sic_forecast_all[:horizon]
     else:
         sic_fields = []
         for d in range(horizon):

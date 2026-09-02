@@ -36,16 +36,31 @@ let layerVisibility = {
     bergs: true,
     routes: true,
 };
+let grid = null;            // /grid — lat/lon/land_mask, fetched once
 let currentForecast = null;
 let currentObserved = null;
 let animationInterval = null;
 
 // ─── Initialisation ───
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initMap();
     addStationMarkers();
+    await loadGrid();
     loadBergs();
 });
+
+// Grid geometry never changes, so it is fetched once here rather than being
+// re-sent with every forecast (the lead-day animation fires 14 of those).
+async function loadGrid() {
+    try {
+        const res = await fetch(`${API}/grid`);
+        if (res.ok) grid = await res.json();
+        else setStatus('Could not load grid');
+    } catch (err) {
+        console.error('Grid load failed:', err);
+        setStatus('Could not load grid');
+    }
+}
 
 function initMap() {
     map = L.map('map-canvas', {
@@ -149,13 +164,13 @@ function renderSICLayer(sicData, colorFn, layerName) {
         map.removeLayer(layers[layerName]);
     }
     
-    if (!sicData || !sicData.sic) return;
+    if (!sicData || !sicData.sic || !grid) return;
     
     const sic = sicData.sic;
-    const lat = sicData.lat;
-    const lon = sicData.lon;
-    const shape = sicData.shape;
-    const landMask = sicData.land_mask;
+    const lat = grid.lat;
+    const lon = grid.lon;
+    const shape = sicData.shape || grid.shape;
+    const landMask = grid.land_mask;
     
     const rectangles = [];
     const cellSizeLat = 0.25; // approximate
@@ -204,33 +219,35 @@ async function loadForecast() {
     setStatus('Loading forecast...');
     
     try {
-        const [forecastRes, observedRes] = await Promise.all([
-            fetch(`${API}/forecast?date=${date}&lead=${lead}`),
-            fetch(`${API}/observed?date=${date}`),
-        ]);
-        
-        if (forecastRes.ok) {
-            currentForecast = await forecastRes.json();
-            renderSICLayer(currentForecast, sicColor, 'forecast');
-            
-            document.getElementById('chip-forecast-info').style.display = 'flex';
-            document.getElementById('forecast-date-display').textContent = 
-                `${date} + ${lead}d = ${currentForecast.stats?.forecast_date || ''}`;
-        }
-        
+        // The forecast is initialized on `date` and valid at date+lead. The
+        // observation must be pulled for that VALID date, not for `date` --
+        // otherwise the difference layer shows the ice change over the lead
+        // window rather than the model's error.
+        const forecastRes = await fetch(`${API}/forecast?date=${date}&lead=${lead}`);
+        if (!forecastRes.ok) throw new Error(`forecast: ${forecastRes.status}`);
+
+        currentForecast = await forecastRes.json();
+        renderSICLayer(currentForecast, sicColor, 'forecast');
+
+        const validDate = currentForecast.stats?.valid_date;
+        document.getElementById('chip-forecast-info').style.display = 'flex';
+        document.getElementById('forecast-date-display').textContent =
+            `${date} + ${lead}d = ${validDate || ''}` +
+            (currentForecast.source === 'model' ? '' : ' (NOT A FORECAST)');
+        if (currentForecast.warning) console.warn(currentForecast.warning);
+
+        const observedRes = await fetch(`${API}/observed?date=${validDate}`);
         if (observedRes.ok) {
             currentObserved = await observedRes.json();
-            // Render observed but hidden by default
             renderSICLayer(currentObserved, sicColor, 'observed');
-            
-            // Compute and render difference
-            if (currentForecast && currentObserved) {
-                const diff = computeDifference(currentForecast, currentObserved);
-                renderSICLayer(diff, diffColor, 'difference');
-            }
+
+            const diff = computeDifference(currentForecast, currentObserved);
+            renderSICLayer(diff, diffColor, 'difference');
         }
-        
-        setStatus('Forecast loaded');
+
+        setStatus(currentForecast.source === 'model'
+            ? 'Forecast loaded'
+            : 'No cached forecast for this date — showing observations');
     } catch (err) {
         setStatus('Error loading forecast');
         console.error(err);
@@ -250,13 +267,7 @@ function computeDifference(forecast, observed) {
         }
     }
     
-    return {
-        sic: diff,
-        lat: forecast.lat,
-        lon: forecast.lon,
-        shape: shape,
-        land_mask: forecast.land_mask,
-    };
+    return { sic: diff, shape: shape };
 }
 
 async function computeRoute() {
@@ -354,7 +365,7 @@ function renderRoutes(data) {
 
 async function loadBergs() {
     try {
-        const res = await fetch(`${API}/bergs?date=2023-01-20&horizon=7`);
+        const res = await fetch(`${API}/bergs?date=2023-01-13&horizon=7`);
         if (!res.ok) return;
         
         const data = await res.json();
@@ -517,8 +528,9 @@ async function loadForecastForLead(date, lead) {
             currentForecast = await res.json();
             renderSICLayer(currentForecast, sicColor, 'forecast');
             
-            document.getElementById('forecast-date-display').textContent = 
-                `${date} + ${lead}d`;
+            document.getElementById('forecast-date-display').textContent =
+                `${date} + ${lead}d = ${currentForecast.stats?.valid_date || ''}` +
+                (currentForecast.source === 'model' ? '' : ' (NOT A FORECAST)');
         }
     } catch (err) {
         console.warn('Error updating lead day:', err);

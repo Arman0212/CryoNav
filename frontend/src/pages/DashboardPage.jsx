@@ -98,7 +98,7 @@ export default function DashboardPage() {
     {
       name: 'Routing (A*)', isReal: true,
       status: routes ? 'Available' : 'Idle',
-      lastUpdate: routes ? `Last run: ${routes.origin?.name} → ${routes.destination?.name}` : 'berg_risk = zeros — run a route on the Routes page',
+      lastUpdate: routes ? `Last run: ${routes.origin?.name} → ${routes.destination?.name}` : 'Berg risk is wired (synthetic bergs) — run a route on the Routes page',
     },
     {
       name: 'Metrics', isReal: true,

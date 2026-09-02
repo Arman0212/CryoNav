@@ -20,9 +20,10 @@ FIXTURE_DIR = get_project_root() / "web" / "fixtures"
 ENDPOINTS = [
     ("config",     "GET",  "/config", None),
     ("demo-dates", "GET",  "/demo-dates", None),
+    ("grid",       "GET",  "/grid", None),
     ("forecast",   "GET",  "/forecast?date=2023-01-13&lead=7", None),
     ("observed",   "GET",  "/observed?date=2023-01-20", None),
-    ("bergs",      "GET",  "/bergs?date=2023-01-20&horizon=7", None),
+    ("bergs",      "GET",  "/bergs?date=2023-01-13&horizon=7&limit=8", None),
     ("metrics",    "GET",  "/metrics", None),
     ("route",      "POST", "/route", {
         "origin": "cape_town",
