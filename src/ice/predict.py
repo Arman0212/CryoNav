@@ -2,7 +2,11 @@
 CryoNav — Sea-ice forecast inference and prediction.
 
 Loads trained checkpoint and produces 14-day SIC forecasts.
-Caches predictions for demo dates.
+
+Forecast cache convention (single source of truth for the API, the demo and
+the router): forecast_<init_date>.npy holds (H, ny, nx), where entry [i] is
+valid at init_date + (i + 1) days. The model saw observed data up to and
+including init_date, and nothing after.
 """
 import torch
 import numpy as np
@@ -10,7 +14,7 @@ import xarray as xr
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from src.config import DOMAIN, MODEL
+from src.config import DOMAIN, MODEL, get_project_root
 from src.ice.models import build_model
 from src.ice.dataset import SeaIceDataset
 
@@ -43,100 +47,163 @@ def load_model(checkpoint_path: str = None, device=None):
     return model, device
 
 
-def predict_date(model, device, zarr_path: str, target_date: str,
-                 input_window: int = 7) -> np.ndarray:
+CACHE_DIRNAME = "demo_cache"
+
+
+def cache_dir(zarr_path: str = None) -> Path:
+    """Directory holding cached model forecasts."""
+    if zarr_path is None:
+        zarr_path = str(get_project_root() / DOMAIN["paths"]["zarr_cube"])
+    return Path(zarr_path).parent / CACHE_DIRNAME
+
+
+def cache_path(init_date: str, zarr_path: str = None) -> Path:
     """
-    Produce a 14-day SIC forecast starting from target_date.
-    
-    Returns: (14, H, W) array of forecasted SIC.
+    Path of the cached forecast initialized on `init_date`.
+
+    Convention, used by every consumer (API, demo, router):
+      forecast_<init_date>.npy has shape (H, ny, nx) and entry [i] is the
+      forecast valid at init_date + (i + 1) days. The model has seen observed
+      data up to and including init_date, and nothing after it.
     """
+    return cache_dir(zarr_path) / f"forecast_{init_date}.npy"
+
+
+def load_cached_forecast(init_date: str, zarr_path: str = None):
+    """Return the cached (H, ny, nx) forecast for `init_date`, or None."""
+    path = cache_path(init_date, zarr_path)
+    if not path.exists():
+        return None
+    return np.load(path)
+
+
+def lead_index(init_date: str, valid_date: str) -> int:
+    """
+    Index into a cached forecast for the field valid at `valid_date`.
+
+    Returns -1 if valid_date is not covered (same day as init, or beyond the
+    forecast horizon).
+    """
+    delta = int((np.datetime64(valid_date) - np.datetime64(init_date))
+                / np.timedelta64(1, "D"))
+    return delta - 1 if delta >= 1 else -1
+
+
+def predict_from_init(model, device, zarr_path: str, init_date: str,
+                      input_window: int = None) -> np.ndarray:
+    """
+    Forecast forward from `init_date`.
+
+    The model is shown the `input_window` days ending on init_date inclusive,
+    and nothing after. Returns (H, ny, nx) where [i] is valid at
+    init_date + (i + 1) days.
+    """
+    if input_window is None:
+        input_window = DOMAIN["time"]["input_window_days"]
+
     ds = xr.open_zarr(zarr_path)
-    
-    # Find the time index for the target date
-    target_dt = np.datetime64(target_date)
     times = ds.time.values
-    
-    # We need the date that is input_window days before target
-    # The forecast will predict days 1–14 from the input state
-    input_end_dt = target_dt - np.timedelta64(1, 'D')  # day before target
-    
-    # Find closest time index
-    idx = np.argmin(np.abs(times - input_end_dt))
-    
+    init_dt = np.datetime64(init_date)
+
+    idx = int(np.argmin(np.abs(times - init_dt)))
+    actual = np.datetime64(times[idx], "D")
+    if actual != np.datetime64(init_date, "D"):
+        raise ValueError(f"{init_date} is not in the cube (nearest: {actual})")
     if idx < input_window - 1:
-        raise ValueError(f"Not enough history before {target_date}")
-    
-    # Create a temporary dataset to get the sample
-    test_ds = SeaIceDataset(zarr_path, split="test")
-    
-    # Build input manually from the zarr
-    sample = _build_sample(ds, idx, input_window, test_ds)
-    
-    # Inference
+        raise ValueError(f"Not enough history before {init_date}")
+
+    sample = _build_sample(ds, idx, input_window)
+
     with torch.no_grad():
         inputs = sample["input"].unsqueeze(0).to(device)
-        pred = model(inputs)
-        pred = pred.squeeze(0).cpu().numpy()
-    
+        pred = model(inputs).squeeze(0).cpu().numpy()
+
     return pred
 
 
-def _build_sample(ds, t_idx, K, ref_dataset):
-    """Build a single sample matching the dataset format."""
+def _build_sample(ds, t_idx, K):
+    """
+    Build one model input from the cube, matching SeaIceDataset's channel order.
+
+    t_idx is the index of the last observed day; channels run t_idx-K+1..t_idx.
+    """
+    norm = SeaIceDataset._normalize
     channels = []
-    
+
     for t in range(t_idx - K + 1, t_idx + 1):
         sic = ds["sic"].values[t]
-        channels.append(ref_dataset._normalize(sic, "sic"))
-        
-        for var in ref_dataset.DRIVER_VARS:
-            val = ds[var].values[t]
-            channels.append(ref_dataset._normalize(val, var))
-        
-        for var in ref_dataset.DERIVED_VARS:
-            val = ds[var].values[t]
-            channels.append(ref_dataset._normalize(val, var))
-        
-        sin_doy = np.full_like(sic, ds["sin_doy"].values[t])
-        cos_doy = np.full_like(sic, ds["cos_doy"].values[t])
-        channels.append(sin_doy)
-        channels.append(cos_doy)
-    
-    # Static channels
-    for v in ref_dataset.STATIC_VARS:
-        channels.append(ref_dataset._normalize(ds[v].values, v))
-    
-    input_tensor = np.stack(channels, axis=0)
-    
+        channels.append(norm(sic, "sic"))
+
+        for var in SeaIceDataset.DRIVER_VARS:
+            channels.append(norm(ds[var].values[t], var))
+
+        for var in SeaIceDataset.DERIVED_VARS:
+            channels.append(norm(ds[var].values[t], var))
+
+        channels.append(np.full_like(sic, ds["sin_doy"].values[t]))
+        channels.append(np.full_like(sic, ds["cos_doy"].values[t]))
+
+    for var in SeaIceDataset.STATIC_VARS:
+        channels.append(norm(ds[var].values, var))
+
     return {
-        "input": torch.from_numpy(input_tensor),
+        "input": torch.from_numpy(np.stack(channels, axis=0).astype(np.float32)),
         "mask": torch.from_numpy(ds["sic_mask"].values.astype(np.float32)),
     }
 
 
-def cache_demo_predictions(model=None, device=None, zarr_path=None):
-    """Precompute and cache predictions for all demo dates."""
+def demo_init_dates() -> list:
+    """
+    Init dates the demo and web UI need cached.
+
+    A demo date is the date the story verifies against; the model is
+    initialized input_window_days earlier so it has genuinely seen nothing
+    in between.
+    """
+    lead = DOMAIN["time"]["input_window_days"]
+    return [str(np.datetime64(d) - np.timedelta64(lead, "D"))
+            for d in DOMAIN.get("held_out_demo_dates", [])]
+
+
+def cache_predictions(init_dates=None, model=None, device=None, zarr_path=None):
+    """Precompute and cache forecasts for the given init dates."""
     if zarr_path is None:
-        zarr_path = str(Path(__file__).resolve().parent.parent.parent / 
-                       DOMAIN["paths"]["zarr_cube"])
-    
+        zarr_path = str(get_project_root() / DOMAIN["paths"]["zarr_cube"])
+    if init_dates is None:
+        init_dates = demo_init_dates()
     if model is None:
         model, device = load_model()
-    
-    cache_dir = Path(zarr_path).parent / "demo_cache"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    
-    for demo_date in DOMAIN["held_out_demo_dates"]:
-        print(f"  Caching prediction for {demo_date}...")
+
+    out_dir = cache_dir(zarr_path)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    ok, failed = [], []
+    for init_date in init_dates:
         try:
-            pred = predict_date(model, device, zarr_path, demo_date)
-            np.save(cache_dir / f"forecast_{demo_date}.npy", pred)
-            print(f"    Saved: shape={pred.shape}, range=[{pred.min():.3f}, {pred.max():.3f}]")
+            pred = predict_from_init(model, device, zarr_path, init_date)
+            np.save(cache_path(init_date, zarr_path), pred)
+            valid_last = np.datetime64(init_date) + np.timedelta64(len(pred), "D")
+            print(f"  {init_date} -> shape={pred.shape}, "
+                  f"valid through {valid_last}, "
+                  f"range=[{pred.min():.3f}, {pred.max():.3f}]")
+            ok.append(init_date)
         except Exception as e:
-            print(f"    Failed: {e}")
-    
-    print(f"  Cache directory: {cache_dir}")
+            print(f"  {init_date} FAILED: {type(e).__name__}: {e}")
+            failed.append(init_date)
+
+    print(f"\nCache: {out_dir}\n  {len(ok)} written, {len(failed)} failed")
+    return ok, failed
 
 
 if __name__ == "__main__":
-    cache_demo_predictions()
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        description="Cache U-Net forecasts. Each file is keyed by its init "
+                    "date -- the last day of observed data the model saw.")
+    ap.add_argument("--dates", nargs="*", default=None,
+                    help="Init dates (YYYY-MM-DD). Default: the dates the demo "
+                         f"needs, {demo_init_dates()}")
+    args = ap.parse_args()
+
+    cache_predictions(init_dates=args.dates)

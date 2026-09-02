@@ -13,15 +13,44 @@ PYTHONPATH=. python scripts/dump_fixtures.py
 |---|---|---|
 | `config.json` | `GET /config` | stations, origins, ship, default cost weights |
 | `demo-dates.json` | `GET /demo-dates` | all 2,922 dates + the 3 held-out demo dates |
-| `forecast.json` | `GET /forecast?date=2023-01-13&lead=7` | `sic`, `lat`, `lon`, `land_mask` as 264×220 arrays |
-| `observed.json` | `GET /observed?date=2023-01-20` | `sic` only — pair with forecast for the difference layer |
-| `bergs.json` | `GET /bergs?date=2023-01-20&horizon=7` | mean tracks + ensemble members |
+| `grid.json` | `GET /grid` | `lat`, `lon`, `land_mask` — **fetch once**, reuse for every field |
+| `forecast.json` | `GET /forecast?date=2023-01-13&lead=7` | `sic` only; pair with `grid.json` to draw |
+| `observed.json` | `GET /observed?date=2023-01-20` | `sic` only |
+| `bergs.json` | `GET /bergs?date=2023-01-13&horizon=7&limit=8` | observed bergs, 50-member ensemble |
 | `route.json` | `POST /route` | 5 route profiles, comparison table, rejection reasons |
 | `metrics.json` | `GET /metrics` | baseline table + training history |
 
 Floats are rounded to 3 decimals (SIC is `[0,1]`; lat/lon at 3 dp is ~100 m).
 
-## Developing against them
+## Two contract rules that are easy to get wrong
+
+**1. Dates.** `/forecast?date=D&lead=L` is *initialized* on `D` and *valid* at
+`D + L`. To draw forecast error, fetch the observation for the **valid** date,
+which the response gives you:
+
+```js
+const f = await (await fetch('/forecast?date=2023-01-13&lead=7')).json();
+const o = await (await fetch(`/observed?date=${f.stats.valid_date}`)).json();
+// f.sic - o.sic  ->  real forecast error
+```
+
+Pairing `/observed?date=D` with the forecast instead shows the ice *change*
+over the lead window, not the model's error.
+
+**2. Check `source`.** `/forecast` returns `source: "model"` when a cached
+U-Net forecast exists for that init date. Otherwise it returns
+`source: "observed_fallback"` plus a `warning`, and the field is the *observed
+truth*, not a prediction. Never plot a fallback as a forecast — badge it, or
+refuse to draw it. `/route` reports the same via `forecast_source`, and berg
+provenance via `berg_source` (`observed` | `synthetic` | `unavailable`).
+
+Cached init dates ship for the three demo dates. Add more with:
+
+```bash
+PYTHONPATH=. python src/ice/predict.py --dates 2023-06-01 2023-06-08
+```
+
+## Developing against the fixtures
 
 Paste this above the `fetch` calls in `app.js` to serve every request from
 fixtures, ignoring query params:
@@ -38,16 +67,3 @@ window.fetch = (url, opts) => {
 
 Set `USE_FIXTURES = false` to go back to the live API. Delete the shim before
 merging — it is a dev aid, not a feature.
-
-## Known contract issues (backend side, being fixed)
-
-- `forecast.json` is **1.4 MB** because every call re-sends `lat`, `lon` and
-  `land_mask`, which never change. The lead-day animation fires 14 of these.
-  These three arrays are moving to `/config`.
-- `/forecast` currently returns *observed* SIC at `date + lead`, not the model
-  output, so the forecast−observed difference layer is near-zero. Being wired
-  to the cached U-Net forecast that `/route` already uses.
-- `/bergs` ignores the real cube and its `date` argument, and returns a
-  10-member ensemble (not 50).
-- `/route` passes a zeroed berg-risk field, so the risk weight does not yet
-  reflect icebergs.

@@ -2,6 +2,7 @@
 CryoNav — FastAPI backend.
 
 Endpoints:
+  GET  /grid                         -> static grid (lat/lon/land_mask), fetch once
   GET  /forecast?date=...&lead=...   -> forecast SIC field + stats
   GET  /observed?date=...            -> observed SIC for overlay proof
   GET  /bergs?date=...&horizon=...   -> berg tracks + ensemble ellipses
@@ -24,6 +25,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from src.config import DOMAIN, ROUTING
+from src.ice.predict import load_cached_forecast, lead_index
 
 app = FastAPI(title="CryoNav API", version="1.0.0",
               description="Antarctic Sea-Ice, Iceberg & Navigation Decision Support")
@@ -38,13 +40,15 @@ app.add_middleware(
 # Globals — loaded on startup
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 ZARR_PATH = str(PROJECT_ROOT / DOMAIN["paths"]["zarr_cube"])
+BERG_CSV = PROJECT_ROOT / "data" / "processed" / "bergs" / "tracked_icebergs_2017_2024.csv"
 DS = None
-CACHE = {}
+BERGS = None          # observed berg tracks, or None if the file is absent
+CACHE = {}            # memoised berg propagations, keyed by (date, horizon, limit)
 
 
 @app.on_event("startup")
 async def startup():
-    global DS
+    global DS, BERGS
     try:
         DS = xr.open_zarr(ZARR_PATH)
         print(f"Loaded Zarr cube: {ZARR_PATH}")
@@ -52,7 +56,31 @@ async def startup():
         print(f"  Grid: {DS.dims}")
     except Exception as e:
         print(f"Warning: Could not load Zarr cube: {e}")
-        print("  API will return synthetic demo data")
+        print("  Field endpoints will return 404 until a cube exists.")
+        print("  Build one with: python src/data/synthetic.py --quick")
+
+    try:
+        import pandas as pd
+        BERGS = pd.read_csv(BERG_CSV, parse_dates=["date"])
+        print(f"Loaded {len(BERGS):,} berg observations "
+              f"({BERGS.berg_id.nunique()} bergs) from {BERG_CSV.name}")
+    except Exception as e:
+        print(f"Warning: no observed berg tracks ({type(e).__name__}); "
+              f"/bergs will fall back to synthetic positions.")
+
+
+def _observed_at(date_str):
+    """Observed SIC field nearest to date_str, plus the date actually used."""
+    idx = int(np.argmin(np.abs(DS.time.values - np.datetime64(date_str))))
+    return DS["sic"].values[idx], str(np.datetime64(DS.time.values[idx], "D"))
+
+
+def _field_stats(field, ocean):
+    return {
+        "mean_sic": float(np.mean(field[ocean])),
+        "ice_extent_cells": int(np.sum((field > 0.15) & ocean)),
+        "ice_area_km2": int(np.sum((field > 0.15) & ocean) * 625),
+    }
 
 
 @app.get("/config")
@@ -85,57 +113,82 @@ async def get_demo_dates():
     }
 
 
-@app.get("/forecast")
-async def get_forecast(date: str, lead: int = 7):
+@app.get("/grid")
+async def get_grid():
     """
-    Get forecast SIC field for a given date and lead day.
-    
-    In production: runs the trained model.
-    In demo mode: returns the SIC field at date + lead from the Zarr cube,
-    simulating a forecast (since synthetic data has no model).
+    Static grid geometry: lat, lon and land mask.
+
+    These never change, so they are served here once instead of being repeated
+    in every /forecast response (which the lead-day animation calls 14 times).
     """
     if DS is None:
         raise HTTPException(404, "Data not loaded")
-    
-    try:
-        target_dt = np.datetime64(date)
-        forecast_dt = target_dt + np.timedelta64(lead, 'D')
-        
-        # For demo: use actual data as "forecast" (the model would predict this)
-        if forecast_dt > DS.time.values[-1] or forecast_dt < DS.time.values[0]:
-            raise HTTPException(400, f"Date {forecast_dt} out of range")
-        
-        # Find nearest time
-        idx = int(np.argmin(np.abs(DS.time.values - forecast_dt)))
-        
-        sic = DS["sic"].values[idx]
-        land_mask = DS["land_mask"].values
-        lat = DS["lat"].values
-        lon = DS["lon"].values
-        
-        # Compute stats
-        ocean = land_mask < 0.5
-        stats = {
-            "date": date,
-            "lead_day": lead,
-            "forecast_date": str(np.datetime64(DS.time.values[idx], 'D')),
-            "mean_sic": float(np.mean(sic[ocean])),
-            "ice_extent_cells": int(np.sum((sic > 0.15) & ocean)),
-            "ice_area_km2": int(np.sum((sic > 0.15) & ocean) * 625),  # 25km² cells
-        }
-        
-        # Return as flattened data for efficient transfer
-        return {
-            "sic": sic.tolist(),
-            "shape": list(sic.shape),
-            "lat": lat.tolist(),
-            "lon": lon.tolist(),
-            "land_mask": land_mask.tolist(),
-            "stats": stats,
-        }
-    
-    except Exception as e:
-        raise HTTPException(500, str(e))
+
+    return {
+        "shape": list(DS["lat"].values.shape),
+        "lat": DS["lat"].values.tolist(),
+        "lon": DS["lon"].values.tolist(),
+        "land_mask": DS["land_mask"].values.tolist(),
+        "cell_size_km": 25,
+    }
+
+
+@app.get("/forecast")
+async def get_forecast(date: str, lead: int = 7):
+    """
+    Model forecast initialized on `date`, valid at `date + lead` days.
+
+    `date` is the initialization date: the last day of observed data the model
+    was shown. The returned field is the U-Net's prediction, loaded from the
+    forecast cache written by src/ice/predict.py.
+
+    If no cached forecast exists for `date`, the response falls back to the
+    OBSERVED field at the valid date and says so in `source`. That fallback is
+    not a forecast — it is the answer — so callers must surface it rather than
+    plot it as a prediction.
+
+    Grid arrays are not included; fetch /grid once instead.
+    """
+    if DS is None:
+        raise HTTPException(404, "Data not loaded")
+
+    horizon = DOMAIN["time"]["forecast_horizon_days"]
+    if not 1 <= lead <= horizon:
+        raise HTTPException(400, f"lead must be in 1..{horizon}, got {lead}")
+
+    init_dt = np.datetime64(date)
+    valid_dt = init_dt + np.timedelta64(lead, "D")
+    if not (DS.time.values[0] <= valid_dt <= DS.time.values[-1]):
+        raise HTTPException(400, f"Valid date {valid_dt} is outside the cube")
+
+    cached = load_cached_forecast(date, ZARR_PATH)
+    if cached is not None and lead <= cached.shape[0]:
+        sic = cached[lead - 1]
+        source = "model"
+        warning = None
+    else:
+        sic, _ = _observed_at(str(valid_dt))
+        source = "observed_fallback"
+        warning = (f"No cached forecast for init date {date}. Returning OBSERVED "
+                   f"SIC at {valid_dt}, which is truth, not a prediction. "
+                   f"Generate one with: python src/ice/predict.py --dates {date}")
+
+    ocean = DS["land_mask"].values < 0.5
+    stats = {
+        "init_date": date,
+        "valid_date": str(np.datetime64(valid_dt, "D")),
+        "lead_day": lead,
+        "source": source,
+        **_field_stats(sic, ocean),
+    }
+
+    return {
+        "sic": sic.tolist(),
+        "shape": list(sic.shape),
+        "source": source,
+        "warning": warning,
+        "stats": stats,
+    }
 
 
 @app.get("/observed")
@@ -166,46 +219,157 @@ async def get_observed(date: str):
         raise HTTPException(500, str(e))
 
 
-@app.get("/bergs")
-async def get_bergs(date: str = "2023-01-20", horizon: int = 7):
-    """Get iceberg tracks with ensemble positions."""
+def _grid_tree():
+    """KD-tree over grid cells for fast nearest-cell lookup during drift."""
+    if "tree" not in CACHE:
+        from scipy.spatial import cKDTree
+        lat = DS["lat"].values
+        lon = DS["lon"].values
+        # Scale longitude by cos(lat) so "nearest" is not biased toward latitude.
+        pts = np.column_stack([
+            (lon * np.cos(np.radians(lat))).ravel(),
+            lat.ravel(),
+        ])
+        CACHE["tree"] = (cKDTree(pts), lat.shape)
+    return CACHE["tree"]
+
+
+def _forcing_from_cube(date: str, horizon: int):
+    """
+    Build a forcing_func sampling real winds, currents and SIC from the cube.
+
+    Replaces the hardcoded sinusoid the demo used to drift bergs with. Fields
+    for the whole window are pulled into memory once; the drift integrator then
+    only does an array lookup per step.
+    """
+    tree, shape = _grid_tree()
+    i0 = int(np.argmin(np.abs(DS.time.values - np.datetime64(date))))
+    i1 = min(i0 + horizon + 1, len(DS.time.values))
+
+    fields = {}
+    for name, var in [("wind_u", "u10"), ("wind_v", "v10"),
+                      ("curr_u", "uo"), ("curr_v", "vo"), ("sic", "sic")]:
+        if var in DS:
+            fields[name] = DS[var].isel(time=slice(i0, i1)).values
+    n_t = len(next(iter(fields.values())))
+
+    def forcing_func(t_day, lat, lon):
+        ti = min(int(t_day), n_t - 1)
+        _, flat_idx = tree.query([lon * np.cos(np.radians(lat)), lat])
+        yi, xi = np.unravel_index(flat_idx, shape)
+        out = {k: float(v[ti, yi, xi]) for k, v in fields.items()}
+        out.setdefault("curr_u", 0.0)
+        out.setdefault("curr_v", 0.0)
+        # zos gradients are not yet wired; the momentum balance treats the
+        # missing pressure-gradient term as zero.
+        out["ssh_grad_x"] = 0.0
+        out["ssh_grad_y"] = 0.0
+        return out
+
+    return forcing_func
+
+
+def _bergs_near_date(date: str, limit: int, days_tol: int = 7):
+    """
+    Observed bergs present on `date`, largest first.
+
+    Returns (list_of_bergs, source). Falls back to synthetic positions only if
+    the tracked-iceberg file was not loaded at startup.
+    """
     from src.berg.risk_field import generate_synthetic_bergs_for_demo
-    from src.berg.dynamics import propagate, empirical_2pct_rule
-    
-    bergs = generate_synthetic_bergs_for_demo(n_bergs=5)
-    
+
+    if BERGS is None:
+        return generate_synthetic_bergs_for_demo(n_bergs=limit), "synthetic"
+
+    import pandas as pd
+    target = pd.Timestamp(date)
+    # Nearest observation per berg within a week of the requested date.
+    window = BERGS[(BERGS["date"] - target).abs() <= pd.Timedelta(days=days_tol)]
+    if window.empty:
+        return generate_synthetic_bergs_for_demo(n_bergs=limit), "synthetic"
+
+    window = window.assign(_gap=(window["date"] - target).abs())
+    nearest = window.sort_values("_gap").groupby("berg_id", as_index=False).first()
+
+    defaults = ROUTING["berg_drift"]
+    bergs = []
+    for row in nearest.itertuples():
+        length_km = getattr(row, "length_km", np.nan)
+        width_km = getattr(row, "width_km", np.nan)
+        bergs.append({
+            "berg_id": row.berg_id,
+            "lat": float(row.latitude),
+            "lon": float(row.longitude),
+            "length_m": (float(length_km) * 1000 if length_km == length_km
+                         else defaults["default_length_m"]),
+            "width_m": (float(width_km) * 1000 if width_km == width_km
+                        else defaults["default_width_m"]),
+            "observed_on": str(row.date.date()),
+        })
+
+    bergs.sort(key=lambda b: b["length_m"] * b["width_m"], reverse=True)
+    return bergs[:limit], "observed"
+
+
+def _propagate_bergs(date: str, horizon: int, limit: int):
+    """Propagate bergs from `date`, memoised — /bergs and /route share this."""
+    key = ("bergs", date, horizon, limit)
+    if key in CACHE:
+        return CACHE[key]
+
+    from src.berg.dynamics import propagate
+
+    bergs, source = _bergs_near_date(date, limit)
+    forcing_func = _forcing_from_cube(date, horizon)
+    n_ensemble = ROUTING["berg_drift"]["n_ensemble"]
+
     results = []
     for berg in bergs:
-        # Simple forcing function for demo
-        def forcing_func(t_day, lat, lon):
-            return {
-                "wind_u": 5.0 + 2.0 * np.sin(t_day * 0.5),
-                "wind_v": -3.0,
-                "curr_u": 0.1,
-                "curr_v": 0.02,
-                "sic": max(0, 0.3 + 0.4 * ((-65 - lat) / 10)),
-                "ssh_grad_x": 0.0,
-                "ssh_grad_y": 0.0,
-            }
-        
         result = propagate(
             berg["berg_id"], berg["lat"], berg["lon"],
-            t0=date, horizon_days=min(horizon, 14),
+            t0=date, horizon_days=horizon,
             forcing_func=forcing_func,
             berg_length=berg["length_m"],
             berg_width=berg["width_m"],
-            method="2pct", n_ensemble=10,
+            method="2pct", n_ensemble=n_ensemble,
         )
-        
-        results.append({
-            "berg_id": result["berg_id"],
-            "mean_track": result["mean_track"],
-            "ensemble": result["ensemble"].tolist(),
-            "length_m": berg["length_m"],
-            "width_m": berg["width_m"],
-        })
-    
-    return {"bergs": results, "date": date, "horizon": horizon}
+        result["length_m"] = berg["length_m"]
+        result["width_m"] = berg["width_m"]
+        result["observed_on"] = berg.get("observed_on")
+        results.append(result)
+
+    CACHE[key] = (results, source, n_ensemble)
+    return CACHE[key]
+
+
+@app.get("/bergs")
+async def get_bergs(date: str = "2023-01-13", horizon: int = 7, limit: int = 8):
+    """
+    Iceberg drift forecasts from `date`, with ensemble spread.
+
+    Positions come from the tracked-iceberg record and are drifted with winds,
+    currents and SIC read from the data cube.
+    """
+    if DS is None:
+        raise HTTPException(404, "Data not loaded")
+
+    horizon = max(1, min(horizon, DOMAIN["time"]["forecast_horizon_days"]))
+    results, source, n_ensemble = _propagate_bergs(date, horizon, limit)
+
+    return {
+        "bergs": [{
+            "berg_id": r["berg_id"],
+            "mean_track": r["mean_track"],
+            "ensemble": r["ensemble"].tolist(),
+            "length_m": r["length_m"],
+            "width_m": r["width_m"],
+            "observed_on": r["observed_on"],
+        } for r in results],
+        "date": date,
+        "horizon": horizon,
+        "source": source,
+        "n_ensemble": n_ensemble,
+    }
 
 
 class RouteRequest(BaseModel):
@@ -215,6 +379,7 @@ class RouteRequest(BaseModel):
     w_time: float = 1.0
     w_fuel: float = 0.5
     w_risk: float = 2.0
+    berg_limit: int = 8
 
 
 @app.post("/route")
@@ -267,20 +432,32 @@ async def compute_route(req: RouteRequest):
     # Get SIC fields for the forecast horizon
     horizon = DOMAIN["time"]["forecast_horizon_days"]
     
-    # Check for cached neural network forecast for this departure date
-    cache_file = PROJECT_ROOT / "data" / "processed" / "demo_cache" / f"forecast_{req.depart_date}.npy"
-    if cache_file.exists():
-        sic_fields = np.load(cache_file)
+    # Route across the model's forecast, initialized on the departure date.
+    # sic_fields[d] is the field the ship meets on day d+1 of the passage.
+    cached = load_cached_forecast(req.depart_date, ZARR_PATH)
+    if cached is not None:
+        sic_fields = cached[:horizon]
+        forecast_source = "model"
     else:
-        sic_fields = []
-        for d in range(horizon):
-            dt = depart_dt + np.timedelta64(d, 'D')
-            idx = int(np.argmin(np.abs(DS.time.values - dt)))
-            sic_fields.append(DS["sic"].values[idx])
-        sic_fields = np.stack(sic_fields, axis=0)
-    
-    # Berg risk field (zeros or from propagation)
-    berg_risk = np.zeros_like(sic_fields)
+        sic_fields = np.stack([
+            DS["sic"].values[int(np.argmin(np.abs(
+                DS.time.values - (depart_dt + np.timedelta64(d + 1, "D")))))]
+            for d in range(horizon)
+        ], axis=0)
+        forecast_source = "observed_fallback"
+
+    # Berg risk the router actually consumes: probability of berg presence per
+    # cell per day, from the same ensemble drift /bergs serves.
+    try:
+        from src.berg.risk_field import compute_risk_field
+        berg_results, berg_source, _ = _propagate_bergs(
+            req.depart_date, horizon, req.berg_limit)
+        berg_risk = compute_risk_field(
+            berg_results, lat_grid, lon_grid, horizon_days=horizon)
+    except Exception as e:
+        print(f"  Berg risk unavailable ({type(e).__name__}: {e}); using zeros.")
+        berg_risk = np.zeros_like(sic_fields)
+        berg_source = "unavailable"
     
     # Generate alternatives
     routes, comparison, rejections = generate_alternatives(
@@ -315,6 +492,8 @@ async def compute_route(req: RouteRequest):
     return {
         "routes": serialized_routes,
         "comparison": display,
+        "forecast_source": forecast_source,
+        "berg_source": berg_source,
         "origin": {"name": origin.get("name", req.origin), 
                    "lat": origin["lat"], "lon": origin["lon"]},
         "destination": {"name": dest.get("name", req.destination),
