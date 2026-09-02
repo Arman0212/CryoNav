@@ -65,12 +65,18 @@ def run_demo(demo_date="2023-01-20", input_date="2023-01-13",
     
     # ── BEAT 2: Forecast ──
     print("\n🔹 Beat 2: Model forecast")
-    # For demo with synthetic data: the "forecast" is the SIC 7 days ahead
-    # In production, this would be the model's prediction
     lead_days = 7
     forecast_dt = input_dt + np.timedelta64(lead_days, 'D')
     forecast_idx = int(np.argmin(np.abs(ds.time.values - forecast_dt)))
-    sic_forecast = ds["sic"].values[forecast_idx]
+    
+    # Check for cached neural network forecast
+    cache_file = PROJECT_ROOT / "data" / "processed" / "demo_cache" / f"forecast_{demo_date}.npy"
+    if cache_file.exists():
+        sic_forecast_all = np.load(cache_file)
+        sic_forecast = sic_forecast_all[min(lead_days - 1, sic_forecast_all.shape[0] - 1)]
+    else:
+        sic_forecast_all = None
+        sic_forecast = ds["sic"].values[forecast_idx]
     
     beat2 = {
         "forecast_date": str(np.datetime64(ds.time.values[forecast_idx], 'D')),
@@ -129,28 +135,34 @@ def run_demo(demo_date="2023-01-20", input_date="2023-01-13",
     print("\n🔹 Beat 4: Route computation")
     from src.routing.alternatives import generate_alternatives, format_comparison_for_display
     
+    def find_approach(lat, lon, land_mask, bathy, sic_ref, max_sic=0.85):
+        dist = (lat_grid - lat)**2 + (lon_grid - lon)**2
+        navigable = (land_mask < 0.5) & (bathy < -15.0) & (sic_ref <= max_sic)
+        dist[~navigable] = np.inf
+        return tuple(int(x) for x in np.unravel_index(np.argmin(dist), dist.shape))
+    
     # Get destination grid cell
     dest_info = DOMAIN["stations"][destination]
-    dest_dist = (lat_grid - dest_info["lat"])**2 + (lon_grid - dest_info["lon"])**2
-    goal_yx = tuple(int(x) for x in np.unravel_index(np.argmin(dest_dist), dest_dist.shape))
-    
     # Get origin grid cell (mid-ocean waypoint for Bharati)
     if destination == "bharati":
         origin_info = DOMAIN["origins"]["mid_ocean_waypoint"]
     else:
         origin_info = DOMAIN["origins"]["cape_town"]
     
-    start_dist = (lat_grid - origin_info["lat"])**2 + (lon_grid - origin_info["lon"])**2
-    start_yx = tuple(int(x) for x in np.unravel_index(np.argmin(start_dist), start_dist.shape))
+    goal_yx = find_approach(dest_info["lat"], dest_info["lon"], land_mask, bathy, sic_input)
+    start_yx = find_approach(origin_info["lat"], origin_info["lon"], land_mask, bathy, sic_input)
     
     # Build SIC field stack for the forecast horizon
     horizon = 14
-    sic_fields = []
-    for d in range(horizon):
-        dt = input_dt + np.timedelta64(d, 'D')
-        idx = int(np.argmin(np.abs(ds.time.values - dt)))
-        sic_fields.append(ds["sic"].values[idx])
-    sic_fields = np.stack(sic_fields, axis=0)
+    if sic_forecast_all is not None:
+        sic_fields = sic_forecast_all
+    else:
+        sic_fields = []
+        for d in range(horizon):
+            dt = input_dt + np.timedelta64(d, 'D')
+            idx = int(np.argmin(np.abs(ds.time.values - dt)))
+            sic_fields.append(ds["sic"].values[idx])
+        sic_fields = np.stack(sic_fields, axis=0)
     
     # Berg risk (zeros for now)
     berg_risk = np.zeros_like(sic_fields)
@@ -303,12 +315,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.all:
-        demo_configs = [
-            ("2019-01-15", "2019-01-08", "maitri"),
-            ("2021-02-10", "2021-02-03", "bharati"),
-            ("2023-01-20", "2023-01-13", "bharati"),
-        ]
-        for demo_date, input_date, dest in demo_configs:
-            run_demo(demo_date, input_date, dest)
+        destinations = {"2021-02-10": "bharati", "2023-01-20": "bharati", "2024-02-15": "maitri"}
+        for demo_date in DOMAIN["held_out_demo_dates"]:
+            input_dt = np.datetime64(demo_date) - np.timedelta64(DOMAIN["time"]["input_window_days"], "D")
+            run_demo(demo_date, str(input_dt), destinations.get(demo_date, "bharati"))
     else:
         run_demo(args.date, args.input_date, args.dest)
