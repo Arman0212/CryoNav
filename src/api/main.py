@@ -247,32 +247,39 @@ async def compute_route(req: RouteRequest):
     else:
         raise HTTPException(400, f"Unknown destination: {req.destination}")
     
-    # Find nearest grid cells
-    start_dist = (lat_grid - origin["lat"])**2 + (lon_grid - origin["lon"])**2
-    start_yx = tuple(int(x) for x in np.unravel_index(np.argmin(start_dist), start_dist.shape))
+    # Find nearest navigable ocean cells
+    def find_approach(lat, lon, land_mask, bathy, sic_ref, max_sic=0.85):
+        dist = (lat_grid - lat)**2 + (lon_grid - lon)**2
+        navigable = (land_mask < 0.5) & (bathy < -15.0) & (sic_ref <= max_sic)
+        dist[~navigable] = np.inf
+        return tuple(int(x) for x in np.unravel_index(np.argmin(dist), dist.shape))
     
-    goal_dist = (lat_grid - dest["lat"])**2 + (lon_grid - dest["lon"])**2
-    goal_yx = tuple(int(x) for x in np.unravel_index(np.argmin(goal_dist), goal_dist.shape))
-    
-    # Get SIC fields for the forecast horizon
     depart_dt = np.datetime64(req.depart_date)
-    horizon = DOMAIN["time"]["forecast_horizon_days"]
-    
-    sic_fields = []
-    for d in range(horizon):
-        dt = depart_dt + np.timedelta64(d, 'D')
-        idx = int(np.argmin(np.abs(DS.time.values - dt)))
-        sic_fields.append(DS["sic"].values[idx])
-    sic_fields = np.stack(sic_fields, axis=0)
-    
-    # Get today's SIC for persistence comparison
     today_idx = int(np.argmin(np.abs(DS.time.values - depart_dt)))
     sic_today = DS["sic"].values[today_idx]
     
     bathy = DS["bathy"].values
     land_mask = DS["land_mask"].values
     
-    # No berg risk for now (would come from berg propagation)
+    start_yx = find_approach(origin["lat"], origin["lon"], land_mask, bathy, sic_today)
+    goal_yx = find_approach(dest["lat"], dest["lon"], land_mask, bathy, sic_today)
+    
+    # Get SIC fields for the forecast horizon
+    horizon = DOMAIN["time"]["forecast_horizon_days"]
+    
+    # Check for cached neural network forecast for this departure date
+    cache_file = PROJECT_ROOT / "data" / "processed" / "demo_cache" / f"forecast_{req.depart_date}.npy"
+    if cache_file.exists():
+        sic_fields = np.load(cache_file)
+    else:
+        sic_fields = []
+        for d in range(horizon):
+            dt = depart_dt + np.timedelta64(d, 'D')
+            idx = int(np.argmin(np.abs(DS.time.values - dt)))
+            sic_fields.append(DS["sic"].values[idx])
+        sic_fields = np.stack(sic_fields, axis=0)
+    
+    # Berg risk field (zeros or from propagation)
     berg_risk = np.zeros_like(sic_fields)
     
     # Generate alternatives

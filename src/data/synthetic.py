@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import sys, os
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.config import DOMAIN
+from src.config import DOMAIN, get_project_root
 
 
 def make_polar_stereo_grid(ny: int = 200, nx: int = 180):
@@ -322,7 +322,8 @@ def generate_iceberg_tracks(n_bergs: int = 30, n_years: int = 5, rng=None):
 def build_synthetic_cube(output_path: str = None, 
                          start_date: str = "2017-01-01",
                          end_date: str = "2024-06-30",
-                         seed: int = 42):
+                         seed: int = 42,
+                         force: bool = False):
     """
     Build the complete analysis-ready Zarr cube with synthetic data.
     
@@ -334,8 +335,17 @@ def build_synthetic_cube(output_path: str = None,
       coords: time (daily), y, x (metres), lat, lon (2-D)
     """
     if output_path is None:
-        output_path = str(Path(__file__).resolve().parent.parent / 
-                         DOMAIN["paths"]["zarr_cube"])
+        # Must resolve against the repo root — the API reads exactly this path.
+        output_path = str(get_project_root() / DOMAIN["paths"]["zarr_cube"])
+
+    # to_zarr(mode="w") is destructive. Never silently replace a cube that is
+    # already there — it may be the real 5.4 GB download.
+    if Path(output_path).exists() and not force:
+        raise SystemExit(
+            f"Refusing to overwrite existing cube at {output_path}\n"
+            f"  It may be the real downloaded data cube.\n"
+            f"  Pass --force to replace it, or --output PATH to write elsewhere."
+        )
     
     print("Building synthetic Antarctic data cube...")
     rng = np.random.default_rng(seed)
@@ -493,4 +503,31 @@ def build_synthetic_cube(output_path: str = None,
 
 
 if __name__ == "__main__":
-    build_synthetic_cube()
+    import argparse
+
+    default_out = get_project_root() / DOMAIN["paths"]["zarr_cube"]
+    ap = argparse.ArgumentParser(
+        description="Build a synthetic Antarctic data cube so the API and web "
+                    "frontend run without the 5.4 GB real download.")
+    ap.add_argument("--output", default=None,
+                    help=f"Zarr output path (default: {default_out})")
+    ap.add_argument("--start-date", default="2017-01-01")
+    ap.add_argument("--end-date", default="2024-06-30",
+                    help="Shorten this for a faster/smaller cube.")
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--force", action="store_true",
+                    help="Overwrite an existing cube at the output path.")
+    ap.add_argument("--quick", action="store_true",
+                    help="Build only 2022-12-01..2023-03-31 (~120 days, ~250 MB) "
+                         "instead of the full range (~5.6 GB). Covers the demo "
+                         "date the web UI opens on — use this for frontend work.")
+    args = ap.parse_args()
+
+    if args.quick:
+        args.start_date, args.end_date = "2022-12-01", "2023-03-31"
+
+    build_synthetic_cube(output_path=args.output,
+                         start_date=args.start_date,
+                         end_date=args.end_date,
+                         seed=args.seed,
+                         force=args.force)

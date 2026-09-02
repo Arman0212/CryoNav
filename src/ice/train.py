@@ -138,8 +138,11 @@ def train(zarr_path: str = None, epochs: int = None, quick_test: bool = False):
     )
     
     # Checkpointing
-    ckpt_dir = Path(zarr_path).parent.parent / "results" / "checkpoints"
+    project_root = Path(__file__).resolve().parent.parent.parent
+    ckpt_dir = project_root / "results" / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
+    models_dir = project_root / "results" / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
     
     best_val_loss = np.inf
     patience_counter = 0
@@ -174,14 +177,16 @@ def train(zarr_path: str = None, epochs: int = None, quick_test: bool = False):
             status = "✓ best"
             
             # Save best checkpoint
-            torch.save({
+            ckpt_data = {
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "val_loss": val_loss,
                 "train_loss": train_loss,
                 "in_channels": in_channels,
-            }, ckpt_dir / "best_model.pt")
+            }
+            torch.save(ckpt_data, ckpt_dir / "best_model.pt")
+            torch.save(ckpt_data, models_dir / "unet_v1_weights.pt")
         else:
             patience_counter += 1
             if patience_counter >= patience:
