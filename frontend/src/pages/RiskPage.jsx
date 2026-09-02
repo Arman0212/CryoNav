@@ -10,12 +10,12 @@ export default function RiskPage() {
   const riskLevel = anri !== null ? getRiskLevel(anri) : { label: 'N/A', color: 'var(--color-text-muted)' };
 
   const factors = [
-    { key: 'seaIce', label: 'Sea Ice', icon: Snowflake, color: '#3399ff' },
-    { key: 'iceberg', label: 'Iceberg', icon: Anchor, color: '#00d4ff' },
-    { key: 'wind', label: 'Wind', icon: Wind, color: '#f59e0b' },
-    { key: 'waves', label: 'Waves', icon: Waves, color: '#0ecdb9' },
-    { key: 'visibility', label: 'Visibility', icon: Eye, color: '#8b5cf6' },
-    { key: 'ocean', label: 'Ocean', icon: Navigation, color: '#3b82f6' },
+    { key: 'seaIce', label: 'Sea Ice', icon: Snowflake, color: '#1668c9' },
+    { key: 'iceberg', label: 'Iceberg', icon: Anchor, color: '#0b7fa8' },
+    { key: 'wind', label: 'Wind', icon: Wind, color: '#b45309' },
+    { key: 'waves', label: 'Waves', icon: Waves, color: '#0f7a6a' },
+    { key: 'visibility', label: 'Visibility', icon: Eye, color: '#6d3fd4' },
+    { key: 'ocean', label: 'Ocean', icon: Navigation, color: '#1d4ed8' },
   ];
 
   return (

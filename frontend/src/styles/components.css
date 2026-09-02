@@ -135,7 +135,7 @@
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5ba8ff;
+  background: #1155a8;
   box-shadow: var(--shadow-glow-blue);
 }
 
@@ -166,7 +166,7 @@
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #f55;
+  background: #a51f1f;
   box-shadow: var(--shadow-glow-danger);
 }
 
@@ -626,13 +626,17 @@
 .map-layer-control {
   position: absolute;
   top: var(--space-4);
-  left: var(--space-4);
+  /* Right-anchored: Leaflet's zoom control owns the top-left corner. */
+  right: var(--space-4);
   background: var(--color-bg-overlay);
   backdrop-filter: blur(12px);
   border: 1px solid var(--color-border-primary);
   border-radius: var(--radius-lg);
   padding: var(--space-3);
-  z-index: var(--z-overlay);
+  /* Leaflet's own stacking context puts .leaflet-pane at 400 and
+     .leaflet-control at 800, so --z-overlay (300) rendered this panel
+     underneath the tiles. Sit above both. */
+  z-index: 1000;
   min-width: 200px;
 }
 

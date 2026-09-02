@@ -3,56 +3,59 @@
    Antarctic Maritime Intelligence Platform
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── CSS Custom Properties (Dark Polar Theme) ─────────────── */
+/* ── CSS Custom Properties (Light Polar Theme) ────────────────
+   Matches the landing page: ice-white ground, deep-navy type, blues
+   darkened for contrast on white. Source palette is the --lp-* block
+   in pages/landing/landing.css. */
 :root {
   /* ── Base Colors ── */
-  --color-bg-primary: #0a0e1a;
-  --color-bg-secondary: #0f1525;
-  --color-bg-tertiary: #151d30;
-  --color-bg-card: #121929;
-  --color-bg-elevated: #1a2340;
-  --color-bg-hover: #1e2a4a;
-  --color-bg-active: #243055;
-  --color-bg-overlay: rgba(10, 14, 26, 0.85);
+  --color-bg-primary: #eef4fa;
+  --color-bg-secondary: #f6fafd;
+  --color-bg-tertiary: #e3edf7;
+  --color-bg-card: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-hover: #e2ecf7;
+  --color-bg-active: #d5e5f6;
+  --color-bg-overlay: rgba(255, 255, 255, 0.82);
 
   /* ── Border Colors ── */
-  --color-border-primary: #1e2a4a;
-  --color-border-secondary: #2a3660;
-  --color-border-accent: #3d4f7c;
-  --color-border-focus: #4a9eff;
+  --color-border-primary: rgba(13, 27, 42, 0.13);
+  --color-border-secondary: rgba(13, 27, 42, 0.22);
+  --color-border-accent: rgba(11, 127, 168, 0.42);
+  --color-border-focus: #1668c9;
 
   /* ── Text Colors ── */
-  --color-text-primary: #e8edf5;
-  --color-text-secondary: #8a95b0;
-  --color-text-tertiary: #5c6a87;
-  --color-text-muted: #3d4a66;
-  --color-text-inverse: #0a0e1a;
+  --color-text-primary: #0d1b2a;
+  --color-text-secondary: #47596f;
+  --color-text-tertiary: #7e90a6;
+  --color-text-muted: #a7b4c4;
+  --color-text-inverse: #ffffff;
 
   /* ── Accent Colors ── */
-  --color-accent-blue: #4a9eff;
-  --color-accent-blue-dim: rgba(74, 158, 255, 0.15);
-  --color-accent-cyan: #00d4ff;
-  --color-accent-cyan-dim: rgba(0, 212, 255, 0.15);
-  --color-accent-teal: #0ecdb9;
-  --color-accent-teal-dim: rgba(14, 205, 185, 0.12);
-  --color-accent-purple: #8b5cf6;
-  --color-accent-purple-dim: rgba(139, 92, 246, 0.15);
+  --color-accent-blue: #1668c9;
+  --color-accent-blue-dim: rgba(22, 104, 201, 0.12);
+  --color-accent-cyan: #0b7fa8;
+  --color-accent-cyan-dim: rgba(11, 127, 168, 0.12);
+  --color-accent-teal: #0f7a6a;
+  --color-accent-teal-dim: rgba(15, 122, 106, 0.12);
+  --color-accent-purple: #6d3fd4;
+  --color-accent-purple-dim: rgba(109, 63, 212, 0.12);
 
   /* ── Semantic Colors ── */
-  --color-success: #10b981;
-  --color-success-dim: rgba(16, 185, 129, 0.15);
-  --color-warning: #f59e0b;
-  --color-warning-dim: rgba(245, 158, 11, 0.15);
-  --color-danger: #ef4444;
-  --color-danger-dim: rgba(239, 68, 68, 0.15);
-  --color-info: #3b82f6;
-  --color-info-dim: rgba(59, 130, 246, 0.15);
+  --color-success: #0f7a53;
+  --color-success-dim: rgba(15, 122, 83, 0.12);
+  --color-warning: #b45309;
+  --color-warning-dim: rgba(180, 83, 9, 0.12);
+  --color-danger: #c62828;
+  --color-danger-dim: rgba(198, 40, 40, 0.12);
+  --color-info: #1668c9;
+  --color-info-dim: rgba(22, 104, 201, 0.12);
 
   /* ── Risk Colors (ANRI Scale 0-100) ── */
-  --color-risk-low: #10b981;       /* 0-25 */
-  --color-risk-moderate: #f59e0b;  /* 26-50 */
-  --color-risk-high: #f97316;      /* 51-75 */
-  --color-risk-critical: #ef4444;  /* 76-100 */
+  --color-risk-low: #0f7a53;       /* 0-25 */
+  --color-risk-moderate: #a16207;  /* 26-50 */
+  --color-risk-high: #c2570b;      /* 51-75 */
+  --color-risk-critical: #c62828;  /* 76-100 */
 
   /* ── Sea Ice Concentration Color Ramp ── */
   --color-sic-0: #001a33;     /* Open water */
@@ -64,11 +67,11 @@
   --color-sic-100: #ffffff;   /* Full ice cover */
 
   /* ── Route Colors ── */
-  --color-route-shortest: #4a9eff;
-  --color-route-safest: #10b981;
-  --color-route-fuel: #f59e0b;
-  --color-route-balanced: #8b5cf6;
-  --color-route-current: #00d4ff;
+  --color-route-shortest: #1668c9;
+  --color-route-safest: #0f7a53;
+  --color-route-fuel: #b45309;
+  --color-route-balanced: #6d3fd4;
+  --color-route-current: #0b7fa8;
 
   /* ── Typography ── */
   --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -116,13 +119,13 @@
   --radius-full: 9999px;
 
   /* ── Shadows ── */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
-  --shadow-glow-blue: 0 0 20px rgba(74, 158, 255, 0.2);
-  --shadow-glow-cyan: 0 0 20px rgba(0, 212, 255, 0.2);
-  --shadow-glow-danger: 0 0 20px rgba(239, 68, 68, 0.2);
+  --shadow-sm: 0 1px 2px rgba(13, 27, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(13, 27, 42, 0.08);
+  --shadow-lg: 0 8px 24px rgba(13, 27, 42, 0.10);
+  --shadow-xl: 0 16px 48px rgba(13, 27, 42, 0.12);
+  --shadow-glow-blue: 0 2px 12px rgba(22, 104, 201, 0.25);
+  --shadow-glow-cyan: 0 2px 12px rgba(11, 127, 168, 0.25);
+  --shadow-glow-danger: 0 2px 12px rgba(198, 40, 40, 0.25);
 
   /* ── Transitions ── */
   --transition-fast: 120ms ease-out;

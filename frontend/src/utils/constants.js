@@ -26,9 +26,135 @@ export const MAP_DEFAULTS = {
   minZoom: 2,
   maxZoom: 12,
   maxBounds: [[-90, -180], [-50, 180]],
-  tileUrl: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  tileAttribution: '&copy; <a href="https://carto.com/">CARTO</a> | CryoNav',
+  basemap: 'esri_ocean',
 };
+
+/* ── Basemaps ───────────────────────────────────────────────────
+   CARTO's basemaps.cartocdn.com tiles now require an API key and
+   render a "API KEY REQUIRED" watermark without one, so the default
+   moved to Esri's ArcGIS Online services, which are keyless.
+
+   All of these are Web Mercator (EPSG:3857), which badly distorts
+   Antarctica and cannot show the pole itself. For a true polar view
+   see the EPSG:3031 notes in MapPage.jsx.
+   ─────────────────────────────────────────────────────────────── */
+export const BASEMAPS = {
+  esri_dark: {
+    label: 'Esri Dark Gray',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/">Esri</a> | CryoNav',
+    maxZoom: 12,
+  },
+  esri_ocean: {
+    label: 'Esri Ocean',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/">Esri</a>, GEBCO, NOAA | CryoNav',
+    maxZoom: 10,
+  },
+  esri_imagery: {
+    label: 'Esri Satellite',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics | CryoNav',
+    maxZoom: 12,
+  },
+  osm: {
+    label: 'OpenStreetMap',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | CryoNav',
+    maxZoom: 12,
+  },
+};
+
+/* ── NASA GIBS — polar-stereographic (EPSG:3031) tiles ──────────
+   Keyless WMTS. Unlike the Mercator basemaps above these are drawn in
+   the projection the data actually lives in, so Antarctica keeps its
+   shape and the pole is reachable.
+
+   `temporal` layers take a date in the URL and only cover a finite
+   window — requesting a date outside it returns 404, so callers must
+   clamp with clampGibsDate() below. `end: null` means "through today".
+   ─────────────────────────────────────────────────────────────── */
+export const GIBS_ENDPOINT = 'https://gibs.earthdata.nasa.gov/wmts/epsg3031/best';
+
+export const POLAR_BASEMAPS = {
+  blue_marble: {
+    label: 'Blue Marble + Bathymetry',
+    layer: 'BlueMarble_ShadedRelief_Bathymetry',
+    tms: '500m',
+    ext: 'jpeg',
+    temporal: false,
+  },
+  modis_terra: {
+    label: 'MODIS Terra True Color',
+    layer: 'MODIS_Terra_CorrectedReflectance_TrueColor',
+    tms: '250m',
+    ext: 'jpg',
+    temporal: true,
+    available: { start: '2000-02-24', end: null },
+  },
+  modis_aqua: {
+    label: 'MODIS Aqua True Color',
+    layer: 'MODIS_Aqua_CorrectedReflectance_TrueColor',
+    tms: '250m',
+    ext: 'jpg',
+    temporal: true,
+    available: { start: '2002-07-03', end: null },
+  },
+};
+
+/* Overlays drawn on top of the polar basemap. */
+export const POLAR_OVERLAYS = {
+  seaIce: {
+    label: 'Sea Ice Concentration (AMSR2)',
+    layer: 'AMSRU2_Sea_Ice_Concentration_12km',
+    tms: '1km',
+    ext: 'png',
+    temporal: true,
+    opacity: 0.7,
+    // AMSR2 stops well short of "today"; the app's date defaults to today.
+    available: { start: '2012-07-02', end: '2025-09-01' },
+  },
+  coastlines: {
+    label: 'Coastlines',
+    layer: 'Coastlines',
+    tms: '250m',
+    ext: 'png',
+    temporal: false,
+    opacity: 0.9,
+  },
+  graticule: {
+    label: 'Graticule',
+    layer: 'Graticule',
+    tms: '250m',
+    ext: 'png',
+    temporal: false,
+    opacity: 0.5,
+  },
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Clamp an ISO date into a GIBS layer's availability window.
+ * Returns the date to request plus whether it had to be moved, so the
+ * UI can say it is showing something other than the selected date.
+ */
+export function clampGibsDate(date, available) {
+  if (!available) return { date, clamped: false };
+  const end = available.end || today();
+  if (date < available.start) return { date: available.start, clamped: true };
+  if (date > end) return { date: end, clamped: true };
+  return { date, clamped: false };
+}
+
+/** Build a Leaflet URL template for a GIBS layer at a given date. */
+export function gibsTileUrl(spec, date) {
+  const time = spec.temporal ? `${clampGibsDate(date, spec.available).date}/` : '';
+  return `${GIBS_ENDPOINT}/${spec.layer}/default/${time}${spec.tms}/{z}/{y}/{x}.${spec.ext}`;
+}
+
+export const GIBS_ATTRIBUTION =
+  'Imagery &copy; <a href="https://worldview.earthdata.nasa.gov/">NASA EOSDIS GIBS</a> | CryoNav';
 
 /* ── Antarctic Research Stations ────────────────────────────── */
 export const RESEARCH_STATIONS = [
@@ -46,16 +172,17 @@ export const RESEARCH_STATIONS = [
 
 /* ── Map Layers ─────────────────────────────────────────────── */
 export const MAP_LAYERS = {
-  SEA_ICE: { id: 'seaIce', label: 'Sea Ice (Observed)', color: '#3399ff', defaultOn: true },
-  SEA_ICE_FORECAST: { id: 'seaIceForecast', label: 'Sea Ice (Forecast)', color: '#ff9933', defaultOn: false },
-  ICEBERGS: { id: 'icebergs', label: 'Icebergs', color: '#00d4ff', defaultOn: true },
-  TRAJECTORIES: { id: 'trajectories', label: 'Iceberg Trajectories', color: '#ff6b6b', defaultOn: true },
-  ROUTES: { id: 'routes', label: 'Routes', color: '#4a9eff', defaultOn: true },
-  RISK_ZONES: { id: 'riskZones', label: 'Risk Zones', color: '#ef4444', defaultOn: false },
-  WEATHER: { id: 'weather', label: 'Weather', color: '#f59e0b', defaultOn: false },
-  OCEAN_CURRENTS: { id: 'oceanCurrents', label: 'Ocean Currents', color: '#0ecdb9', defaultOn: false },
-  VESSELS: { id: 'vessels', label: 'Vessels', color: '#8b5cf6', defaultOn: true },
-  STATIONS: { id: 'stations', label: 'Research Stations', color: '#e8edf5', defaultOn: true },
+  SEA_ICE: { id: 'seaIce', label: 'Sea Ice (Observed)', color: '#1668c9', defaultOn: true },
+  SEA_ICE_FORECAST: { id: 'seaIceForecast', label: 'Sea Ice (Forecast)', color: '#c2570b', defaultOn: false },
+  ICEBERGS: { id: 'icebergs', label: 'Icebergs', color: '#0b7fa8', defaultOn: true },
+  TRAJECTORIES: { id: 'trajectories', label: 'Iceberg Trajectories', color: '#c2410c', defaultOn: true },
+  ROUTES: { id: 'routes', label: 'Routes', color: '#1d4ed8', defaultOn: true },
+  RISK_ZONES: { id: 'riskZones', label: 'Risk Zones', color: '#c62828', defaultOn: false },
+  WEATHER: { id: 'weather', label: 'Weather', color: '#b45309', defaultOn: false },
+  OCEAN_CURRENTS: { id: 'oceanCurrents', label: 'Ocean Currents', color: '#0f7a6a', defaultOn: false },
+  VESSELS: { id: 'vessels', label: 'Vessels', color: '#6d3fd4', defaultOn: true },
+  // was #e8edf5 — a near-white swatch is invisible on the light ground
+  STATIONS: { id: 'stations', label: 'Research Stations', color: '#334c66', defaultOn: true },
   BATHYMETRY: { id: 'bathymetry', label: 'Bathymetry', color: '#1e3a5f', defaultOn: false },
 };
 
