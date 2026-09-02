@@ -11,7 +11,10 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 def load_yaml(name: str) -> dict:
     """Load a YAML config file from the config/ directory."""
     path = _PROJECT_ROOT / "config" / name
-    with open(path) as f:
+    # encoding must be explicit: a bare open() uses locale.getpreferredencoding(),
+    # which is cp1252 on a default Windows install. The config files are UTF-8,
+    # so "55°S" loaded as "55Â°S" and reached the API that way.
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 def get_config() -> dict:

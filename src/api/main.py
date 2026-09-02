@@ -166,45 +166,56 @@ async def get_observed(date: str):
         raise HTTPException(500, str(e))
 
 
-@app.get("/bergs")
-async def get_bergs(date: str = "2023-01-20", horizon: int = 7):
-    """Get iceberg tracks with ensemble positions."""
+def _propagate_demo_bergs(date: str, horizon_days: int, n_bergs: int = 5):
+    """
+    Propagate the demo iceberg set, returning (berg, propagate_result) pairs.
+
+    Shared by GET /bergs, which serialises the tracks for the map, and
+    POST /route, which turns them into the berg-risk field the router
+    consumes — so the bergs drawn on the map are the same ones the route
+    is asked to avoid.
+    """
     from src.berg.risk_field import generate_synthetic_bergs_for_demo
-    from src.berg.dynamics import propagate, empirical_2pct_rule
-    
-    bergs = generate_synthetic_bergs_for_demo(n_bergs=5)
-    
-    results = []
-    for berg in bergs:
-        # Simple forcing function for demo
-        def forcing_func(t_day, lat, lon):
-            return {
-                "wind_u": 5.0 + 2.0 * np.sin(t_day * 0.5),
-                "wind_v": -3.0,
-                "curr_u": 0.1,
-                "curr_v": 0.02,
-                "sic": max(0, 0.3 + 0.4 * ((-65 - lat) / 10)),
-                "ssh_grad_x": 0.0,
-                "ssh_grad_y": 0.0,
-            }
-        
-        result = propagate(
+    from src.berg.dynamics import propagate
+
+    def forcing_func(t_day, lat, lon):
+        return {
+            "wind_u": 5.0 + 2.0 * np.sin(t_day * 0.5),
+            "wind_v": -3.0,
+            "curr_u": 0.1,
+            "curr_v": 0.02,
+            "sic": max(0, 0.3 + 0.4 * ((-65 - lat) / 10)),
+            "ssh_grad_x": 0.0,
+            "ssh_grad_y": 0.0,
+        }
+
+    out = []
+    for berg in generate_synthetic_bergs_for_demo(n_bergs=n_bergs):
+        out.append((berg, propagate(
             berg["berg_id"], berg["lat"], berg["lon"],
-            t0=date, horizon_days=min(horizon, 14),
+            t0=date, horizon_days=min(horizon_days, 14),
             forcing_func=forcing_func,
             berg_length=berg["length_m"],
             berg_width=berg["width_m"],
             method="2pct", n_ensemble=10,
-        )
-        
-        results.append({
+        )))
+    return out
+
+
+@app.get("/bergs")
+async def get_bergs(date: str = "2023-01-20", horizon: int = 7):
+    """Get iceberg tracks with ensemble positions."""
+    results = [
+        {
             "berg_id": result["berg_id"],
             "mean_track": result["mean_track"],
             "ensemble": result["ensemble"].tolist(),
             "length_m": berg["length_m"],
             "width_m": berg["width_m"],
-        })
-    
+        }
+        for berg, result in _propagate_demo_bergs(date, horizon)
+    ]
+
     return {"bergs": results, "date": date, "horizon": horizon}
 
 
@@ -279,8 +290,21 @@ async def compute_route(req: RouteRequest):
             sic_fields.append(DS["sic"].values[idx])
         sic_fields = np.stack(sic_fields, axis=0)
     
-    # Berg risk field (zeros or from propagation)
-    berg_risk = np.zeros_like(sic_fields)
+    # Berg risk field, from the same demo bergs GET /bergs draws.
+    # This was previously np.zeros_like(sic_fields), which made
+    # max_berg_risk 0.00 on every profile and left the request's w_risk
+    # weight with nothing to act on — "min ice" and "balanced" could only
+    # ever differ by sea-ice cost. If propagation fails we fall back to
+    # zeros rather than failing the whole route request.
+    from src.berg.risk_field import compute_risk_field
+    try:
+        berg_tracks = [r for _, r in _propagate_demo_bergs(req.depart_date, horizon)]
+        berg_risk = compute_risk_field(
+            berg_tracks, lat_grid, lon_grid, horizon_days=horizon,
+        ).astype(sic_fields.dtype, copy=False)
+    except Exception as exc:  # pragma: no cover - defensive
+        print(f"[route] berg propagation failed, falling back to zeros: {exc}")
+        berg_risk = np.zeros_like(sic_fields)
     
     # Generate alternatives
     routes, comparison, rejections = generate_alternatives(
@@ -293,6 +317,14 @@ async def compute_route(req: RouteRequest):
         start_yx=start_yx,
         goal_yx=goal_yx,
         sic_today=sic_today,
+        # The request's cost weights were previously accepted and then
+        # ignored - every profile used its configured weights, so the UI's
+        # POLARIS sliders changed nothing. Apply them to "balanced", which is
+        # the profile those sliders are documented as tuning; the others stay
+        # fixed so they remain a stable comparison.
+        weight_overrides={"balanced": {
+            "w_time": req.w_time, "w_fuel": req.w_fuel, "w_risk": req.w_risk,
+        }},
     )
     
     # Serialize routes for JSON

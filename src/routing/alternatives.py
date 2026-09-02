@@ -15,10 +15,18 @@ from src.routing.astar import astar_route, smooth_path
 
 def generate_alternatives(sic_fields, berg_risk_field, bathy, land_mask,
                           lat_grid, lon_grid, start_yx, goal_yx,
-                          sic_today=None, cell_size_km=25.0):
+                          sic_today=None, cell_size_km=25.0,
+                          weight_overrides=None):
     """
     Generate all candidate routes and the comparison table.
     
+    Args:
+        weight_overrides: optional {profile_key: {"w_time", "w_fuel", "w_risk"}}
+            replacing that profile's configured weights. POST /route uses it to
+            apply the caller's cost weights to the "balanced" profile; the other
+            profiles keep their configured weights so they stay fixed reference
+            alternatives to compare against.
+
     Returns:
         routes: dict mapping profile name -> route result dict
         comparison: list of dicts with all metrics
@@ -29,6 +37,10 @@ def generate_alternatives(sic_fields, berg_risk_field, bathy, land_mask,
     
     for name, profile in profiles.items():
         print(f"  Computing route: {profile['name']}...")
+
+        weights = dict(profile)
+        if weight_overrides and name in weight_overrides:
+            weights.update(weight_overrides[name])
         
         # Use persistence SIC (today's field repeated) for the persistence_route
         if profile.get("use_persistence") and sic_today is not None:
@@ -42,9 +54,9 @@ def generate_alternatives(sic_fields, berg_risk_field, bathy, land_mask,
             bathy=bathy, land_mask=land_mask,
             lat_grid=lat_grid, lon_grid=lon_grid,
             start_yx=start_yx, goal_yx=goal_yx,
-            w_time=profile.get("w_time", 1.0),
-            w_fuel=profile.get("w_fuel", 0.5),
-            w_risk=profile.get("w_risk", 2.0),
+            w_time=weights.get("w_time", 1.0),
+            w_fuel=weights.get("w_fuel", 0.5),
+            w_risk=weights.get("w_risk", 2.0),
             v_open_kn=ROUTING["speed_model"]["v_open_kn"],
             cell_size_km=cell_size_km,
             ignore_ice=profile.get("ignore_ice", False),

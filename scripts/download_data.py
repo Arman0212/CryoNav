@@ -28,6 +28,14 @@ from pathlib import Path
 import argparse
 import urllib.request
 
+# This script prints U+2713 / U+2717 / U+23F3. On Windows the console defaults
+# to cp1252, which cannot encode them, so --verify died with UnicodeEncodeError
+# mid-report - and then died again inside its own except: handler, which also
+# prints a mark. Force UTF-8 where the runtime supports it.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import DOMAIN
 
@@ -131,8 +139,29 @@ def download_file_with_progress(url: str, output_path: Path) -> bool:
         return False
 
 
-def extract_archive(archive_path: Path, target_dir: Path):
-    """Extract .tar.gz or .zip file into target directory."""
+def extract_archive(archive_path: Path, target_dir: Path, force: bool = False):
+    """
+    Extract .tar.gz or .zip file into target directory.
+
+    Refuses to extract over an existing cube unless force=True. Zarr is a
+    directory of chunk files, so a plain extractall on top of one merges the
+    two: chunks the new cube does not overwrite survive from the old one and
+    you get a silently mixed dataset (e.g. a 2738-day synthetic cube's tail
+    left inside a 2922-day real one). With force, the existing cube is moved
+    aside to <name>.bak first rather than deleted.
+    """
+    if ZARR_PATH.exists():
+        if not force:
+            print(f"Refusing to overwrite existing cube: {ZARR_PATH}")
+            print("Pass --force to replace it (the old one is kept as .bak), "
+                  "or --output PATH to extract elsewhere.")
+            return False
+        backup = ZARR_PATH.with_suffix(ZARR_PATH.suffix + ".bak")
+        if backup.exists():
+            shutil.rmtree(backup)
+        print(f"Moving existing cube aside -> {backup.name}")
+        shutil.move(str(ZARR_PATH), str(backup))
+
     print(f"Extracting {archive_path.name} to {target_dir} ...")
     target_dir.mkdir(parents=True, exist_ok=True)
     
@@ -233,21 +262,27 @@ if __name__ == "__main__":
     parser.add_argument("--package", action="store_true", help="Package local Zarr cube into .tar.gz for Google Drive upload")
     parser.add_argument("--all", action="store_true", help="Download all processed data from default cloud mirror")
     parser.add_argument("--gdrive-id", type=str, default=None, help="Google Drive File ID of the antarctic_cube_2017_2024.tar.gz archive")
+    # Both of these are documented in the README but were never implemented,
+    # so the script silently extracted on top of whatever cube was already there.
+    parser.add_argument("--force", action="store_true", help="Replace an existing cube (the old one is kept alongside as .bak)")
+    parser.add_argument("--output", type=str, default=None, help="Extract into PATH instead of data/processed/")
     args = parser.parse_args()
+
+    target_dir = Path(args.output).expanduser().resolve() if args.output else PROCESSED_DIR
 
     if args.package:
         package_local_cube()
     elif args.gdrive_id:
-        target_archive = PROCESSED_DIR / "antarctic_cube_2017_2024.tar.gz"
+        target_archive = target_dir / "antarctic_cube_2017_2024.tar.gz"
         success = download_from_google_drive(args.gdrive_id, target_archive)
         if success:
-            extract_archive(target_archive, PROCESSED_DIR)
-            verify_local_data()
+            if extract_archive(target_archive, target_dir, force=args.force):
+                verify_local_data()
     elif args.all:
         print("Syncing dataset from cloud mirror...")
-        target_archive = PROCESSED_DIR / "antarctic_cube_2017_2024.tar.gz"
+        target_archive = target_dir / "antarctic_cube_2017_2024.tar.gz"
         if download_file_with_progress(DEFAULT_MIRROR_URLS["cube"], target_archive):
-            extract_archive(target_archive, PROCESSED_DIR)
-            verify_local_data()
+            if extract_archive(target_archive, target_dir, force=args.force):
+                verify_local_data()
     else:
         verify_local_data()

@@ -239,7 +239,7 @@ export default function RoutesPage() {
         )}
 
         <div className="card-footer" style={{ textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-sm)' }}>
-          ⚠️ Note: Iceberg risk is currently zeroed out server-side (berg_risk = np.zeros in POST /route). Routes do NOT avoid icebergs until the backend wires berg propagation into routing.
+          ⚠️ Note: routes now avoid icebergs — POST /route builds a berg-risk field by propagating the same bergs the map shows. Those bergs are still synthetic: the BYU-derived tracked_icebergs_2017_2024.parquet is not present, so positions are generated, not observed. Max Berg Risk reads 0.00 when a route simply passes nowhere near them.
         </div>
       </div>
     </div>
