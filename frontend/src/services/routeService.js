@@ -36,6 +36,11 @@ const routeService = {
     wFuel = 0.5,
     wRisk = 2.0,
   } = {}) {
+    /* The A* search runs synchronously over the 5.4 GB cube. On a departure
+       date with no cached forecast it measures ~55 s cold, which blows past
+       apiClient's 30 s default and surfaces as a spurious "Request timed
+       out". Only this endpoint is slow, so widen it here rather than
+       globally. */
     const { data } = await apiClient.post('/route', {
       origin,
       destination,
@@ -43,7 +48,7 @@ const routeService = {
       w_time: wTime,
       w_fuel: wFuel,
       w_risk: wRisk,
-    });
+    }, { timeout: 180000 });
     return data;
   },
 
