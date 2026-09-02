@@ -20,7 +20,13 @@ source .venv/bin/activate
 # 1. Build data cube (synthetic if no real data)
 echo ""
 echo "Step 1: Building data cube..."
-python src/data/synthetic.py
+CUBE="$PROJECT_ROOT/data/processed/antarctic_cube.zarr"
+if [ -d "$CUBE" ]; then
+    echo "  Cube already present at $CUBE — skipping generation."
+    echo "  (Delete it, or run synthetic.py --force, to rebuild.)"
+else
+    python src/data/synthetic.py
+fi
 
 # 2. Run baselines
 echo ""

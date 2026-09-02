@@ -46,7 +46,23 @@ python scripts/download_data.py --gdrive-id 1EE-ggmzrbKDD69qupAt0ck8DhfhHytu8
 python scripts/download_data.py --verify
 
 # Option C: Synthetic fallback mode (for offline/instant lightweight testing)
-PYTHONPATH=. python src/data/synthetic.py
+PYTHONPATH=. python src/data/synthetic.py --quick   # ~120 days, ~250 MB, ~3 s
+PYTHONPATH=. python src/data/synthetic.py           # full range, ~5.6 GB
+```
+
+Writes to `data/processed/antarctic_cube.zarr` — the exact path the API reads.
+It refuses to overwrite a cube that already exists; pass `--force` to replace
+one, or `--output PATH` to write elsewhere.
+
+#### Frontend development (no dataset needed)
+
+The web UI can be built entirely against frozen API responses in
+[`web/fixtures/`](web/fixtures/) — no data cube, no trained model, no backend
+process. See [`web/fixtures/README.md`](web/fixtures/README.md). Regenerate
+them after any change to a response shape:
+
+```bash
+PYTHONPATH=. python scripts/dump_fixtures.py
 ```
 
 #### Team Manual: Accessing the Dataset
