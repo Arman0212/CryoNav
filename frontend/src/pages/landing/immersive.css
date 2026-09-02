@@ -1,0 +1,302 @@
+/* ═══════════════════════════════════════════════════════════════
+   Immersive landing — light Antarctic palette, minimal glass UI.
+   All rules namespaced .lp3- so nothing can reach the dashboard.
+   ═══════════════════════════════════════════════════════════════ */
+
+body.immersive-mode { background: #e9f2fa; }
+
+/* Boot field shown while WebGL support is being probed */
+.lp3-boot {
+  position: fixed; inset: 0;
+  background: linear-gradient(180deg, #f4fafd 0%, #dceaf5 60%, #e9f2fa 100%);
+}
+
+.lp3-root {
+  --ink: #0d1b2a;
+  --ink-2: #40566e;
+  --ink-3: #7d90a6;
+  --ice: #0b7fa8;
+  --deep: #1668c9;
+  --danger: #c2570b;
+  --safe: #0f7a53;
+  --glass: rgba(255, 255, 255, 0.72);
+  --hair: rgba(13, 27, 42, 0.12);
+
+  position: relative;
+  width: 100%;
+  color: var(--ink);
+  font-family: var(--font-family-primary);
+}
+
+/* ── The pinned world ──────────────────────────────────────────── */
+.lp3-stage { position: fixed; inset: 0; z-index: 0; }
+.lp3-canvas { display: block; width: 100% !important; height: 100% !important; }
+.lp3-stage-fallback { position: absolute; inset: 0; background: linear-gradient(180deg, #f2f8fd, #d8e8f4); }
+
+/* Soft edge so the scene sits in the page rather than filling a box */
+.lp3-vignette {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 120% 90% at 50% 45%, transparent 55%, rgba(233, 242, 250, 0.75) 100%);
+}
+
+.lp3-spacer { position: relative; z-index: 1; pointer-events: none; }
+
+/* ── HUD ───────────────────────────────────────────────────────── */
+.lp3-hud { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+.lp3-hud > div { position: absolute; }
+
+.lp3-hud-tl { top: clamp(1rem, 3vh, 2rem); left: clamp(1rem, 4vw, 3rem); }
+.lp3-hud-tr { top: clamp(1rem, 3vh, 2rem); right: clamp(1rem, 4vw, 3rem); text-align: right; }
+.lp3-hud-bl { bottom: clamp(1.5rem, 5vh, 3rem); left: clamp(1rem, 4vw, 3rem); min-width: 220px; }
+
+.lp3-brand {
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase;
+}
+.lp3-sub {
+  font-family: var(--font-family-mono);
+  font-size: 0.6875rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-2); margin-top: 4px;
+}
+.lp3-meta {
+  font-family: var(--font-family-mono);
+  font-size: 0.625rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-3); margin-top: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.lp3-hud-tr .lp3-meta { justify-content: flex-end; }
+.lp3-tag { color: var(--ink-3); opacity: 0.85; font-style: normal; }
+
+.lp3-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--safe);
+  box-shadow: 0 0 8px currentColor; animation: lp3-blink 2.6s ease-in-out infinite;
+}
+@keyframes lp3-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.lp3-clock {
+  font-family: var(--font-family-mono);
+  font-size: clamp(1.5rem, 3vw, 2.4rem); font-weight: 700;
+  letter-spacing: 0.04em; font-variant-numeric: tabular-nums; line-height: 1;
+}
+
+/* Instrument readouts */
+.lp3-readout { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.lp3-readout-label {
+  font-family: var(--font-family-mono); font-size: 0.625rem;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  min-width: 62px;
+}
+.lp3-readout-value {
+  font-family: var(--font-family-mono); font-size: 1.5rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.lp3-readout-sm .lp3-readout-value { font-size: 0.9375rem; }
+.lp3-readout-unit, .lp3-readout-band {
+  font-family: var(--font-family-mono); font-size: 0.625rem;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3);
+}
+.lp3-readout-band { color: var(--ink-2); }
+.lp3-sim {
+  font-family: var(--font-family-mono); font-size: 0.5625rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--danger);
+  border: 1px solid rgba(194, 87, 11, 0.35); border-radius: 2px; padding: 0 4px;
+}
+
+.lp3-bar {
+  width: 190px; height: 3px; background: rgba(13, 27, 42, 0.1);
+  margin: 6px 0 14px; overflow: hidden;
+}
+.lp3-bar-fill {
+  display: block; height: 100%; width: 100%; transform-origin: 0 50%;
+  transform: scaleX(0.24); transition: background-color 400ms ease;
+  background: var(--safe);
+}
+.lp3-bar-fill.is-warn { background: #b45309; }
+.lp3-bar-fill.is-danger { background: var(--danger); }
+
+/* Mission progress rail */
+.lp3-rail {
+  position: fixed; left: 0; right: 0; bottom: 0; height: 2px;
+  background: rgba(13, 27, 42, 0.08);
+}
+.lp3-rail-fill {
+  display: block; height: 100%; transform-origin: 0 50%; transform: scaleX(0);
+  background: linear-gradient(90deg, var(--deep), var(--ice));
+}
+
+/* ── Narrative ─────────────────────────────────────────────────── */
+.lp3-narrative {
+  position: fixed;
+  z-index: 4;
+  left: clamp(1rem, 4vw, 3rem);
+  bottom: clamp(7rem, 22vh, 12rem);
+  max-width: min(560px, 46vw);
+  pointer-events: none;
+}
+.lp3-phase { animation: lp3-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes lp3-in { from { opacity: 0; transform: translate3d(0, 18px, 0); } to { opacity: 1; transform: none; } }
+
+.lp3-phase-eyebrow {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  font-family: var(--font-family-mono); font-size: 0.625rem;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--ice);
+}
+.lp3-phase-num { font-weight: 700; }
+.lp3-phase-rule { width: 42px; height: 1px; background: rgba(11, 127, 168, 0.45); }
+
+.lp3-title {
+  margin: 0 0 14px;
+  font-size: clamp(2.25rem, 5.4vw, 4.5rem);
+  font-weight: 800; line-height: 0.98; letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+.lp3-title-line {
+  display: block;
+  animation: lp3-in 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.lp3-body {
+  font-size: clamp(0.875rem, 1.15vw, 1.0625rem);
+  line-height: 1.6; color: var(--ink-2); max-width: 44ch; font-weight: 300;
+}
+
+.lp3-final-actions {
+  display: flex; align-items: center; gap: 16px; margin-top: 26px;
+  pointer-events: auto; flex-wrap: wrap;
+}
+.lp3-btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 14px 30px; cursor: pointer; border-radius: 2px;
+  background: var(--deep); color: #fff; border: 1px solid var(--deep);
+  font-family: var(--font-family-mono); font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  transition: all 200ms ease; box-shadow: 0 6px 20px rgba(22, 104, 201, 0.26);
+}
+.lp3-btn:hover { background: #0d55a8; transform: translateY(-1px); box-shadow: 0 10px 26px rgba(22, 104, 201, 0.34); }
+.lp3-final-note {
+  font-family: var(--font-family-mono); font-size: 0.625rem;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+}
+
+/* ── AI alert ──────────────────────────────────────────────────── */
+.lp3-alert {
+  position: fixed; z-index: 5;
+  right: clamp(1rem, 4vw, 3rem); top: 50%; transform: translateY(-50%);
+  width: min(310px, 78vw); padding: 16px 18px;
+  background: var(--glass); border: 1px solid rgba(194, 87, 11, 0.4);
+  border-left: 3px solid var(--danger); border-radius: 2px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 14px 40px rgba(13, 27, 42, 0.14);
+  opacity: 0; visibility: hidden;
+}
+.lp3-alert-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-family: var(--font-family-mono); font-size: 0.6875rem;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--danger); font-weight: 700;
+}
+.lp3-alert-body { font-size: 0.8125rem; line-height: 1.55; color: var(--ink-2); margin: 0; }
+.lp3-alert-trade {
+  display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--hair);
+  font-family: var(--font-family-mono); font-size: 0.625rem;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+}
+.lp3-alert-trade strong { color: var(--ink); font-size: 0.8125rem; }
+.lp3-alert-gain { display: flex; align-items: center; gap: 4px; color: var(--safe); }
+
+/* ── Scroll cue ────────────────────────────────────────────────── */
+.lp3-scroll-cue {
+  position: fixed; z-index: 4; left: 50%; bottom: 26px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  font-family: var(--font-family-mono); font-size: 0.5625rem;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3);
+  animation: lp3-fade-out 1s ease 6s both;
+}
+.lp3-scroll-line {
+  width: 1px; height: 34px;
+  background: linear-gradient(180deg, rgba(11, 127, 168, 0.6), transparent);
+  animation: lp3-cue 2.2s ease-in-out infinite; transform-origin: top;
+}
+@keyframes lp3-cue { 0%,100% { transform: scaleY(0.3); opacity: 0.4; } 50% { transform: scaleY(1); opacity: 1; } }
+@keyframes lp3-fade-out { to { opacity: 0; visibility: hidden; } }
+
+
+/* ── Added readouts, callout and final reveal ──────────────────── */
+.lp3-readout-lead { margin-bottom: 2px; }
+.lp3-readout-big { font-size: 2rem; }
+.lp3-readout-id { font-size: 0.8125rem; letter-spacing: 0.06em; }
+
+.lp3-status {
+  font-family: var(--font-family-mono); font-size: 0.6875rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--safe);
+}
+.lp3-status.is-warn { color: #b45309; }
+.lp3-status.is-danger { color: var(--danger); }
+
+.lp3-scale-note {
+  margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--hair);
+  font-family: var(--font-family-mono); font-size: 0.5625rem;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3);
+  max-width: 210px; line-height: 1.6;
+}
+
+/* Detection callout, anchored to the berg in 3D */
+.lp3-callout {
+  width: 190px; padding: 10px 12px; opacity: 0; visibility: hidden;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--hair); border-left: 2px solid var(--danger);
+  border-radius: 2px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(13, 27, 42, 0.14);
+  transition: opacity 400ms ease; pointer-events: none;
+  font-family: var(--font-family-mono);
+}
+.lp3-callout-id {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--ink); margin-bottom: 7px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--hair);
+}
+.lp3-callout-rows { display: flex; flex-direction: column; gap: 3px; }
+.lp3-callout-rows span {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 0.5625rem; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.lp3-callout-rows em { color: var(--ink-3); font-style: normal; min-width: 62px; }
+.lp3-callout-rows b { color: var(--ink); font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+.lp3-callout-rows i { font-style: normal; }
+
+/* Final reveal — centred, quiet, the way out into the app */
+.lp3-narrative-final {
+  left: 50%; right: auto; transform: translateX(-50%);
+  bottom: auto; top: 50%; margin-top: -6vh;
+  max-width: min(760px, 88vw); text-align: center;
+}
+.lp3-title-final { font-size: clamp(2rem, 5vw, 4rem); }
+.lp3-wordmark {
+  margin: 26px 0 10px;
+  font-size: clamp(1.5rem, 3vw, 2.4rem); font-weight: 800;
+  letter-spacing: 0.34em; text-transform: uppercase; color: var(--ink);
+}
+.lp3-body-center { margin: 0 auto; text-align: center; max-width: 46ch; }
+.lp3-narrative-final .lp3-final-actions { justify-content: center; margin-top: 30px; }
+.lp3-narrative-final .lp3-final-note { display: block; margin-top: 12px; }
+
+@media (max-width: 900px) {
+  .lp3-narrative-final { max-width: 92vw; }
+  .lp3-scale-note { display: none; }
+  .lp3-readout-big { font-size: 1.5rem; }
+}
+
+/* ── Responsive ────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .lp3-narrative { max-width: none; right: clamp(1rem, 4vw, 3rem); bottom: 9rem; }
+  .lp3-alert { top: auto; bottom: 9rem; transform: none; right: clamp(1rem, 4vw, 3rem); left: clamp(1rem, 4vw, 3rem); width: auto; }
+  .lp3-hud-bl { bottom: 1.25rem; }
+  .lp3-bar { width: 130px; }
+  .lp3-clock { font-size: 1.25rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp3-phase, .lp3-title-line { animation: none !important; }
+  .lp3-scroll-line, .lp3-dot { animation: none !important; }
+  .lp3-scroll-cue { animation: none !important; }
+}

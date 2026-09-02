@@ -1,13 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════
-   CryoNav App Root — Router + Layout + WebSocket init
+   CryoNav App Root — Router
+
+   Two branches:
+     "/"   → LandingPage, rendered bare (no Layout chrome, page scrolls)
+     "/*"  → the existing application, unchanged, inside <Layout>
+
+   The app branch is nested so Layout keeps its original `children` API and
+   every existing route keeps its original path — nothing about the
+   dashboard had to move to make room for the landing page.
    ═══════════════════════════════════════════════════════════════ */
 
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import Layout from './Layout';
 import { useConnectionStatus } from '@hooks/useConnectionStatus';
 
-/* ── Lazy-loaded Pages ── */
+/* ── Landing ── */
+const LandingPage = React.lazy(() => import('@pages/landing/LandingPage'));
+
+/* ── Lazy-loaded Application Pages ── */
 const DashboardPage = React.lazy(() => import('@pages/DashboardPage'));
 const MapPage = React.lazy(() => import('@pages/MapPage'));
 const IcePage = React.lazy(() => import('@pages/IcePage'));
@@ -38,18 +49,23 @@ function PageLoader() {
   );
 }
 
-export default function App() {
-  /* ── Connection indicator ──
-     The real backend has no WebSocket route, so connectivity is derived
-     from periodic /config health checks instead (see useConnectionStatus).
-     websocketService remains available for when a WS route is added. */
+/** Minimal fallback while the landing page chunk loads */
+function LandingLoader() {
+  return <div style={{ minHeight: '100vh', background: '#04060c' }} />;
+}
+
+/**
+ * The existing application, unchanged.
+ * Backend health polling lives here rather than in App so the public
+ * landing page never triggers API calls (or error toasts) of its own.
+ */
+function AppShell() {
   useConnectionStatus();
 
   return (
     <Layout>
       <React.Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/ice" element={<IcePage />} />
@@ -67,5 +83,21 @@ export default function App() {
         </Routes>
       </React.Suspense>
     </Layout>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <React.Suspense fallback={<LandingLoader />}>
+            <LandingPage />
+          </React.Suspense>
+        }
+      />
+      <Route path="*" element={<AppShell />} />
+    </Routes>
   );
 }
