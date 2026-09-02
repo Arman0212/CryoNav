@@ -2,11 +2,12 @@
    TopBar — Page title, date picker, alerts, connection status
    ═══════════════════════════════════════════════════════════════ */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Calendar } from 'lucide-react';
 import useAppStore from '@stores/useAppStore';
 import useAlertStore from '@stores/useAlertStore';
+import { useDemoDates } from '@hooks/useConfig';
 
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
@@ -35,6 +36,28 @@ export default function TopBar() {
 
   const pageTitle = PAGE_TITLES[location.pathname] || 'CryoNav';
 
+  /* The cube covers a fixed historical window (2017-2024), but the store
+     seeds selectedDate with today's date. Every forecast-backed page then
+     asked for data the cube does not contain and failed — /ice was the
+     visible casualty. Constrain the picker to what is actually loaded, and
+     pull an out-of-range date back in.
+
+     The fallback is the newest demo date rather than range.end because
+     /forecast needs date + lead to be in range too: sitting on the last
+     day of the cube would still fail for any lead > 0. */
+  const { data: dates } = useDemoDates();
+  const range = dates?.range;
+  const fallbackDate = dates?.demo_dates?.length
+    ? dates.demo_dates[dates.demo_dates.length - 1]
+    : range?.end;
+
+  useEffect(() => {
+    if (!range || !fallbackDate) return;
+    if (selectedDate < range.start || selectedDate > range.end) {
+      setSelectedDate(fallbackDate);
+    }
+  }, [range, fallbackDate, selectedDate, setSelectedDate]);
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -43,11 +66,16 @@ export default function TopBar() {
 
       <div className="topbar-right">
         {/* ── Date Selector (replaces hardcoded date) ── */}
-        <label className="topbar-date" title="Select analysis date">
+        <label
+          className="topbar-date"
+          title={range ? `Select analysis date (data covers ${range.start} to ${range.end})` : 'Select analysis date'}
+        >
           <Calendar size={14} />
           <input
             type="date"
             value={selectedDate}
+            min={range?.start}
+            max={range?.end}
             onChange={(e) => setSelectedDate(e.target.value)}
             style={{
               background: 'transparent',

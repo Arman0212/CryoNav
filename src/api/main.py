@@ -134,6 +134,12 @@ async def get_forecast(date: str, lead: int = 7):
             "stats": stats,
         }
     
+    except HTTPException:
+        # A deliberate 4xx (e.g. "date out of range") must not be swallowed by
+        # the catch-all below and re-raised as a 500 — that turned a clear
+        # client error into {"detail": "400: Date ... out of range"} with a 500
+        # status, so callers could not distinguish bad input from a server bug.
+        raise
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -162,6 +168,12 @@ async def get_observed(date: str):
                 "ice_extent_km2": int(np.sum((sic > 0.15) & ocean) * 625),
             }
         }
+    except HTTPException:
+        # A deliberate 4xx (e.g. "date out of range") must not be swallowed by
+        # the catch-all below and re-raised as a 500 — that turned a clear
+        # client error into {"detail": "400: Date ... out of range"} with a 500
+        # status, so callers could not distinguish bad input from a server bug.
+        raise
     except Exception as e:
         raise HTTPException(500, str(e))
 
