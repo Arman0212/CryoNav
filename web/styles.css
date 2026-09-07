@@ -392,24 +392,93 @@ input[type="range"]::-webkit-slider-thumb:hover {
     position: absolute;
     top: 16px;
     left: 16px;
+    right: 16px;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
     z-index: 10;
+    pointer-events: none;
+}
+
+.map-overlay > * {
+    pointer-events: auto;
+}
+
+/* === PHOTOREALISTIC BASEMAP SELECTOR === */
+.basemap-selector {
+    display: inline-flex;
+    background: rgba(5, 10, 25, 0.96);
+    border: 1px solid rgba(0, 212, 255, 0.45);
+    border-radius: var(--radius-xl);
+    backdrop-filter: blur(20px);
+    padding: 4px;
+    gap: 4px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 0, 0, 0.8);
+}
+
+.basemap-btn {
+    background: rgba(16, 28, 58, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    padding: 7px 14px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    color: #dbeafe;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.basemap-btn:hover {
+    color: #ffffff;
+    background: rgba(30, 52, 104, 0.95);
+    border-color: rgba(0, 212, 255, 0.4);
+}
+
+.basemap-btn.active {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    color: #ffffff;
+    font-weight: 700;
+    border: 1px solid #38bdf8;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* === NAUTICAL RADAR ICEBERG STYLING === */
+.berg-radar-pulse {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 242, 254, 0.6);
+    background: rgba(0, 242, 254, 0.12);
+    animation: radarPulse 2.5s infinite cubic-bezier(0.2, 0.8, 0.2, 1);
+    pointer-events: none;
+}
+
+@keyframes radarPulse {
+    0% { transform: scale(0.6); opacity: 1; }
+    100% { transform: scale(2.2); opacity: 0; }
 }
 
 .map-chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
-    background: var(--bg-glass);
-    border: 1px solid var(--border-subtle);
+    padding: 7px 14px;
+    background: rgba(5, 10, 25, 0.94);
+    border: 1px solid rgba(0, 212, 255, 0.35);
     border-radius: var(--radius-xl);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(20px);
     font-size: 11px;
-    color: var(--text-secondary);
-    font-weight: 500;
+    color: #f1f5f9;
+    font-weight: 600;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65);
 }
 
 .lead-slider-overlay {
@@ -417,22 +486,23 @@ input[type="range"]::-webkit-slider-thumb:hover {
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--bg-glass);
-    border: 1px solid var(--border-subtle);
+    background: rgba(5, 10, 25, 0.94);
+    border: 1px solid rgba(0, 212, 255, 0.35);
     border-radius: var(--radius-xl);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(20px);
     padding: 12px 24px;
     display: flex;
     align-items: center;
     gap: 16px;
     z-index: 10;
     min-width: 400px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
 }
 
 .lead-label {
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-secondary);
+    color: #cbd5e1;
     white-space: nowrap;
 }
 
@@ -511,8 +581,18 @@ input[type="range"]::-webkit-slider-thumb:hover {
     font-weight: 600;
 }
 
+.route-table tr {
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
 .route-table tr:hover {
-    background: rgba(255,255,255,0.02);
+    background: rgba(0, 212, 255, 0.08);
+}
+
+.route-table tr.active-route {
+    background: rgba(0, 212, 255, 0.18);
+    box-shadow: inset 2px 0 0 var(--accent-primary);
 }
 
 /* === REJECTION REASONS === */
