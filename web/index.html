@@ -244,6 +244,30 @@
                     📊 Load Forecast
                 </button>
             </div>
+
+            <!-- Iceberg Drift Horizon Control -->
+            <div class="control-section animate-in" style="animation-delay: 0.35s">
+                <div class="section-header">
+                    <div class="section-icon">🧊</div>
+                    <span class="section-title">Iceberg Drift Horizon</span>
+                </div>
+                
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label class="form-label" style="margin: 0;">Physics Drift Window</label>
+                        <span id="berg-horizon-badge" style="font-size: 11px; font-weight: 700; color: #00f2fe; background: rgba(0, 242, 254, 0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(0, 242, 254, 0.3);">7 Days</span>
+                    </div>
+                    <input type="range" id="slider-berg-horizon" min="1" max="60" step="1" value="7"
+                           oninput="updateBergHorizon(this.value)" style="width: 100%;">
+                    <div style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary berg-preset-btn active" id="btn-bh-7" style="font-size: 10px; padding: 4px 8px; flex: 1;" onclick="setBergHorizon(7)">7d</button>
+                        <button class="btn btn-secondary berg-preset-btn" id="btn-bh-14" style="font-size: 10px; padding: 4px 8px; flex: 1;" onclick="setBergHorizon(14)">14d</button>
+                        <button class="btn btn-secondary berg-preset-btn" id="btn-bh-30" style="font-size: 10px; padding: 4px 8px; flex: 1;" onclick="setBergHorizon(30)">30d</button>
+                        <button class="btn btn-primary berg-preset-btn" id="btn-bh-50" style="font-size: 10px; padding: 4px 8px; flex: 1.2; background: rgba(0, 242, 254, 0.22); border-color: #00f2fe; color: #00f2fe; font-weight: 700;" onclick="setBergHorizon(50)">50d 🚀</button>
+                        <button class="btn btn-secondary berg-preset-btn" id="btn-bh-60" style="font-size: 10px; padding: 4px 8px; flex: 1;" onclick="setBergHorizon(60)">60d</button>
+                    </div>
+                </div>
+            </div>
         </aside>
 
         <!-- MAP -->

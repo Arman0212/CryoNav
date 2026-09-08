@@ -97,9 +97,9 @@ PYTHONPATH=. python src/ice/train.py
 # Run Complete Demo Pipeline
 PYTHONPATH=. python scripts/run_demo.py --all
 
-# Launch Interactive Polar Navigation Web App
-PYTHONPATH=. python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000
-# Open http://localhost:8000
+# Launch Interactive Polar Navigation Web App (Full Stack)
+python main.py
+# Automatically starts backend, serves frontend, and opens http://localhost:8000
 ```
 
 ---

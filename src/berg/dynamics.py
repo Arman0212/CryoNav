@@ -271,11 +271,23 @@ def propagate(berg_id, start_lat, start_lon, t0, horizon_days,
             ssh_gy = forcing.get("ssh_grad_y", 0)
             
             if method == "dynamics":
+                old_lat, old_lon = berg.lat, berg.lon
                 rk4_step(berg, DT, wind_u, wind_v, curr_u, curr_v, sic,
                         ssh_gx, ssh_gy)
+                next_f = forcing_func(t_day, berg.lat, berg.lon)
+                if next_f.get("land_mask", 0.0) > 0.5 or next_f.get("bathy", -100.0) > -15.0:
+                    # Grounded at coast / shoal: halt drift into land
+                    berg.lat, berg.lon = old_lat, old_lon
+                    berg.vx, berg.vy = 0.0, 0.0
             else:
-                berg.lat, berg.lon = empirical_2pct_rule(
+                next_lat, next_lon = empirical_2pct_rule(
                     berg.lat, berg.lon, wind_u, wind_v, curr_u, curr_v, DT/3600)
+                next_f = forcing_func(t_day, next_lat, next_lon)
+                if next_f.get("land_mask", 0.0) > 0.5 or next_f.get("bathy", -100.0) > -15.0:
+                    # Grounded at coast: halt drift into land
+                    pass
+                else:
+                    berg.lat, berg.lon = next_lat, next_lon
             
             # Record position at daily intervals
             if (step + 1) % n_steps_per_day == 0:

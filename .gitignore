@@ -17,4 +17,5 @@ results/
 # OS / editor
 .DS_Store
 .vscode/
+*.code-workspace
 .env

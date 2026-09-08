@@ -500,6 +500,9 @@ async function loadForecast() {
         setStatus(currentForecast.source === 'model'
             ? 'Forecast loaded'
             : 'No cached forecast for this date — showing observations');
+        
+        // Sync iceberg observations and drift horizon with chosen date
+        loadBergs(date, currentBergHorizon);
     } catch (err) {
         setStatus('Error loading forecast');
         console.error(err);
@@ -651,15 +654,46 @@ function selectRoute(key) {
     if (targetRow) targetRow.classList.add('active-route');
 }
 
-async function loadBergs() {
+let currentBergHorizon = 7;
+
+function setBergHorizon(days) {
+    const slider = document.getElementById('slider-berg-horizon');
+    if (slider) slider.value = days;
+    updateBergHorizon(days);
+}
+
+function updateBergHorizon(days) {
+    currentBergHorizon = parseInt(days, 10);
+    const badge = document.getElementById('berg-horizon-badge');
+    if (badge) badge.textContent = `${currentBergHorizon} Days`;
+    
+    // Highlight matching preset button
+    document.querySelectorAll('.berg-preset-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById(`btn-bh-${currentBergHorizon}`);
+    if (activeBtn) activeBtn.classList.add('active');
+    
+    const date = document.getElementById('input-date')?.value || '2023-01-13';
+    loadBergs(date, currentBergHorizon);
+}
+
+async function loadBergs(date, horizon) {
+    const d = date || document.getElementById('input-date')?.value || '2023-01-13';
+    const h = horizon || currentBergHorizon || 7;
+    
+    setStatus(`Simulating iceberg drift (+${h} days)...`);
     try {
-        const res = await fetch(`${API}/bergs?date=2023-01-13&horizon=7`);
-        if (!res.ok) return;
+        const res = await fetch(`${API}/bergs?date=${d}&horizon=${h}&limit=8`);
+        if (!res.ok) {
+            setStatus('Ready');
+            return;
+        }
         
         const data = await res.json();
         renderBergs(data);
+        setStatus(`Loaded ${data.bergs?.length || 0} bergs · +${h}d trajectory projected`);
     } catch (err) {
         console.warn('Could not load bergs:', err);
+        setStatus('Ready');
     }
 }
 
@@ -669,13 +703,16 @@ function renderBergs(data) {
     }
     
     const bergLayers = [];
+    const horizonDays = data.horizon || 7;
     
     for (const berg of data.bergs) {
-        // Current position
-        const lat = berg.mean_track[0][1];
-        const lon = berg.mean_track[0][2];
+        if (!berg.mean_track || berg.mean_track.length === 0) continue;
+
+        // Current / Initial position (Day 0)
+        const startLat = berg.mean_track[0][1];
+        const startLon = berg.mean_track[0][2];
         
-        // Realistic SVG Iceberg Marker with Radar Pulse
+        // Realistic SVG Iceberg Marker with Radar Pulse (Start Location)
         const bergIcon = L.divIcon({
             className: 'berg-marker',
             html: `
@@ -691,12 +728,13 @@ function renderBergs(data) {
             iconAnchor: [12, 12],
         });
         
-        const marker = L.marker([lat, lon], { icon: bergIcon });
+        const marker = L.marker([startLat, startLon], { icon: bergIcon });
         marker.bindTooltip(`
             <div style="padding: 2px 4px; font-family:'Inter', sans-serif;">
-                <div style="font-weight:700; color:#00f2fe; margin-bottom:2px; font-size:12px;">🧊 Iceberg ${berg.berg_id}</div>
+                <div style="font-weight:700; color:#00f2fe; margin-bottom:2px; font-size:12px;">🧊 Iceberg ${berg.berg_id} (Day 0)</div>
                 <div style="color:#e8f0f8; font-size:11px;">Dimensions: <strong>${berg.length_m.toFixed(0)}m × ${berg.width_m.toFixed(0)}m</strong></div>
-                <div style="color:#8ba3c7; font-size:10px;">Position: ${lat.toFixed(2)}°S, ${lon.toFixed(2)}°E</div>
+                <div style="color:#8ba3c7; font-size:10px;">Start: ${startLat.toFixed(2)}°S, ${startLon.toFixed(2)}°E</div>
+                ${berg.observed_on ? `<div style="color:#00d4ff; font-size:10px;">Observed: ${berg.observed_on}</div>` : ''}
             </div>
         `, {
             className: 'route-tooltip',
@@ -704,22 +742,60 @@ function renderBergs(data) {
         });
         bergLayers.push(marker);
         
-        // Mean track
+        // Full drift trajectory line
         if (berg.mean_track.length > 1) {
             const trackPoints = berg.mean_track.map(p => [p[1], p[2]]);
             bergLayers.push(L.polyline(trackPoints, {
                 color: '#ffd700',
-                weight: 1.5,
-                opacity: 0.6,
-                dashArray: '4 4',
+                weight: 2,
+                opacity: 0.85,
+                dashArray: '5 3',
             }));
+            
+            // Endpoint position (Day +N)
+            const lastPoint = berg.mean_track[berg.mean_track.length - 1];
+            const endLat = lastPoint[1];
+            const endLon = lastPoint[2];
+            const actualDays = lastPoint[0] || horizonDays;
+            
+            // Distance displaced from Day 0
+            const dLatKm = (endLat - startLat) * 111.32;
+            const dLonKm = (endLon - startLon) * 111.32 * Math.cos(startLat * Math.PI / 180);
+            const totalDispKm = Math.sqrt(dLatKm * dLatKm + dLonKm * dLonKm);
+            
+            // Projected Endpoint Target Marker
+            const endIcon = L.divIcon({
+                className: 'berg-target-marker',
+                html: `
+                    <div style="position:relative; width:18px; height:18px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                        <div style="width:12px; height:12px; border-radius:50%; background:#ffd700; border:2px solid #ffffff; box-shadow:0 0 8px #ffd700;"></div>
+                        <span style="position:absolute; top:-14px; background:rgba(13,23,48,0.92); border:1px solid #ffd700; color:#ffd700; font-size:9px; font-weight:700; padding:1px 4px; border-radius:3px; white-space:nowrap;">+${actualDays}d</span>
+                    </div>
+                `,
+                iconSize: [18, 18],
+                iconAnchor: [9, 9],
+            });
+            
+            const endMarker = L.marker([endLat, endLon], { icon: endIcon });
+            endMarker.bindTooltip(`
+                <div style="padding: 2px 4px; font-family:'Inter', sans-serif;">
+                    <div style="font-weight:700; color:#ffd700; margin-bottom:2px; font-size:12px;">🎯 Day +${actualDays} Projected Location</div>
+                    <div style="color:#e8f0f8; font-size:11px;">Berg <strong>${berg.berg_id}</strong></div>
+                    <div style="color:#8ba3c7; font-size:10px;">Predicted: ${endLat.toFixed(2)}°S, ${endLon.toFixed(2)}°E</div>
+                    <div style="color:#00f2fe; font-size:10px;">Net Drift: <strong>${totalDispKm.toFixed(0)} km</strong> from Day 0</div>
+                </div>
+            `, {
+                className: 'route-tooltip',
+                sticky: true,
+            });
+            bergLayers.push(endMarker);
         }
         
-        // Ensemble spread (simplified ellipse at last position)
+        // Ensemble spread (Monte Carlo uncertainty ellipse at final day)
         if (berg.ensemble && berg.ensemble.length > 1) {
-            const lastDay = Math.min(6, berg.ensemble[0].length - 1);
-            const lats = berg.ensemble.map(e => e[lastDay]?.[0]).filter(v => v);
-            const lons = berg.ensemble.map(e => e[lastDay]?.[1]).filter(v => v);
+            const lastIdx = berg.ensemble[0].length - 1;
+            const lats = berg.ensemble.map(e => e[lastIdx]?.[0]).filter(v => typeof v === 'number');
+            const lons = berg.ensemble.map(e => e[lastIdx]?.[1]).filter(v => typeof v === 'number');
             
             if (lats.length > 2) {
                 const meanLat = lats.reduce((a,b) => a+b, 0) / lats.length;
@@ -729,14 +805,14 @@ function renderBergs(data) {
                 
                 const radiusLat = stdLat * 2 * 111320;
                 const radiusLon = stdLon * 2 * 111320 * Math.cos(meanLat * Math.PI / 180);
-                const radius = Math.max(radiusLat, radiusLon, 5000);
+                const radius = Math.max(radiusLat, radiusLon, 6000);
                 
                 bergLayers.push(L.circle([meanLat, meanLon], {
                     radius: radius,
-                    color: 'rgba(255, 215, 0, 0.3)',
-                    fillColor: 'rgba(255, 215, 0, 0.08)',
-                    weight: 1,
-                    dashArray: '3 3',
+                    color: 'rgba(255, 215, 0, 0.45)',
+                    fillColor: 'rgba(255, 215, 0, 0.1)',
+                    weight: 1.5,
+                    dashArray: '4 4',
                 }));
             }
         }

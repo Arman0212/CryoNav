@@ -44,11 +44,12 @@ BERG_CSV = PROJECT_ROOT / "data" / "processed" / "bergs" / "tracked_icebergs_201
 DS = None
 BERGS = None          # observed berg tracks, or None if the file is absent
 CACHE = {}            # memoised berg propagations, keyed by (date, horizon, limit)
+GRID_CACHE = None
 
 
 @app.on_event("startup")
 async def startup():
-    global DS, BERGS
+    global DS, BERGS, GRID_CACHE
     try:
         DS = xr.open_zarr(ZARR_PATH)
         print(f"Loaded Zarr cube: {ZARR_PATH}")
@@ -67,6 +68,24 @@ async def startup():
     except Exception as e:
         print(f"Warning: no observed berg tracks ({type(e).__name__}); "
               f"/bergs will fall back to synthetic positions.")
+
+    if DS is not None and GRID_CACHE is None:
+        try:
+            from src.data.sources.bathymetry import load_canonical_bathymetry_grid
+            raw_b = load_canonical_bathymetry_grid()
+            real_bathy = np.nan_to_num(raw_b, nan=0.0).tolist()
+        except Exception:
+            real_bathy = np.nan_to_num(DS["bathy"].values, nan=0.0).tolist() if "bathy" in DS else None
+
+        GRID_CACHE = {
+            "shape": list(DS["lat"].values.shape),
+            "lat": DS["lat"].values.tolist(),
+            "lon": DS["lon"].values.tolist(),
+            "land_mask": DS["land_mask"].values.tolist(),
+            "bathy": real_bathy,
+            "cell_size_km": 25,
+            "bathymetry_source": "GEBCO / IBCSO v2 (DOI: 10.1594/PANGAEA.937574)",
+        }
 
 
 def _observed_at(date_str):
@@ -117,6 +136,12 @@ async def get_demo_dates():
     }
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    from fastapi.responses import Response
+    return Response(status_code=204)
+
+
 @app.get("/grid")
 async def get_grid():
     """
@@ -125,6 +150,10 @@ async def get_grid():
     These never change, so they are served here once instead of being repeated
     in every /forecast response (which the lead-day animation calls 14 times).
     """
+    global GRID_CACHE
+    if GRID_CACHE is not None:
+        return GRID_CACHE
+
     if DS is None:
         raise HTTPException(404, "Data not loaded")
 
@@ -132,12 +161,11 @@ async def get_grid():
     try:
         from src.data.sources.bathymetry import load_canonical_bathymetry_grid
         raw_b = load_canonical_bathymetry_grid()
-        # Clean NaNs outside southern ocean domain for standard JSON compliance
         real_bathy = np.nan_to_num(raw_b, nan=0.0).tolist()
     except Exception:
         real_bathy = np.nan_to_num(DS["bathy"].values, nan=0.0).tolist() if "bathy" in DS else None
 
-    return {
+    GRID_CACHE = {
         "shape": list(DS["lat"].values.shape),
         "lat": DS["lat"].values.tolist(),
         "lon": DS["lon"].values.tolist(),
@@ -146,6 +174,7 @@ async def get_grid():
         "cell_size_km": 25,
         "bathymetry_source": "GEBCO / IBCSO v2 (DOI: 10.1594/PANGAEA.937574)",
     }
+    return GRID_CACHE
 
 
 @app.get("/data/provenance")
@@ -316,6 +345,8 @@ def _forcing_from_cube(date: str, horizon: int):
         if var in DS:
             fields[name] = DS[var].isel(time=slice(i0, i1)).values
     n_t = len(next(iter(fields.values())))
+    static_land = DS["land_mask"].values if "land_mask" in DS else None
+    static_bathy = DS["bathy"].values if "bathy" in DS else None
 
     def forcing_func(t_day, lat, lon):
         ti = min(int(t_day), n_t - 1)
@@ -324,8 +355,8 @@ def _forcing_from_cube(date: str, horizon: int):
         out = {k: float(v[ti, yi, xi]) for k, v in fields.items()}
         out.setdefault("curr_u", 0.0)
         out.setdefault("curr_v", 0.0)
-        # zos gradients are not yet wired; the momentum balance treats the
-        # missing pressure-gradient term as zero.
+        out["land_mask"] = float(static_land[yi, xi]) if static_land is not None else 0.0
+        out["bathy"] = float(static_bathy[yi, xi]) if static_bathy is not None else -100.0
         out["ssh_grad_x"] = 0.0
         out["ssh_grad_y"] = 0.0
         return out
@@ -417,7 +448,8 @@ async def get_bergs(date: str = "2023-01-13", horizon: int = 7, limit: int = 8):
     if DS is None:
         raise HTTPException(404, "Data not loaded")
 
-    horizon = max(1, min(horizon, DOMAIN["time"]["forecast_horizon_days"]))
+    # Allow extended multi-month drift simulations up to 90 days
+    horizon = max(1, min(horizon, 90))
     results, source, n_ensemble = _propagate_bergs(date, horizon, limit)
 
     return {
@@ -428,6 +460,11 @@ async def get_bergs(date: str = "2023-01-13", horizon: int = 7, limit: int = 8):
             "length_m": r["length_m"],
             "width_m": r["width_m"],
             "observed_on": r["observed_on"],
+            "final_position": {
+                "day": horizon,
+                "lat": r["mean_track"][-1][1],
+                "lon": r["mean_track"][-1][2],
+            } if r.get("mean_track") else None,
         } for r in results],
         "date": date,
         "horizon": horizon,
@@ -735,7 +772,7 @@ async def get_app_js():
     return FileResponse(str(PROJECT_ROOT / "web" / "app.js"), headers={"Cache-Control": "no-cache"})
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     """Serve the frontend."""
     index_path = PROJECT_ROOT / "web" / "index.html"
