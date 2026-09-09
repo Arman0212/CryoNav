@@ -114,8 +114,10 @@ export default function MapControls({
           <span className="mc-label">Berg drift</span>
           <span className="mc-value">+{bergHorizon}d</span>
         </div>
+        {/* Main's client allows drift out to 60 days; the 14-day cap here
+            was the forecast horizon, which is a different question. */}
         <input
-          type="range" min={1} max={14} step={1} value={bergHorizon}
+          type="range" min={1} max={60} step={1} value={bergHorizon}
           onChange={(e) => setBergHorizon(Number(e.target.value))}
         />
       </div>

@@ -42,6 +42,8 @@ import LiveIcebergLayer from '@components/map/LiveIcebergLayer';
 import MapControls from '@components/map/MapControls';
 import PlaceMarkers from '@components/map/PlaceMarkers';
 import VectorFieldLayer from '@components/map/VectorFieldLayer';
+import MapLegend from '@components/map/MapLegend';
+import CoordinateChips from '@components/map/CoordinateChips';
 import '@styles/map-layers.css';
 import {
   MAP_DEFAULTS, RESEARCH_STATIONS, DEPARTURE_PORTS, MAP_LAYERS, BASEMAPS,
@@ -218,6 +220,8 @@ export default function MapPage() {
           />
         )}
 
+        <CoordinateChips projection={projection} gridShape={grid?.shape} />
+
         {/* Reference geometry: the Antarctic Circle, and the box the model
             actually covers so it's obvious where the data stops. */}
         <Circle
@@ -381,6 +385,8 @@ export default function MapPage() {
           </p>
         )}
       </div>
+
+      <MapLegend />
 
       {/* Lead-day / berg-horizon scrubbing */}
       <MapControls

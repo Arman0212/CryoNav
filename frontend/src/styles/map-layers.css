@@ -196,3 +196,97 @@
   margin-top: 8px;
   flex-wrap: wrap;
 }
+
+/* ── Legend ────────────────────────────────────────────────────
+   Light-theme panel matching the app's own surfaces, not the dark
+   chrome the bundled web/ client uses. */
+.map-legend {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 1000;
+  width: 210px;
+  background: rgba(255, 255, 255, 0.93);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.lg-head {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--font-family-mono); font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.lg-chevron { margin-left: auto; transition: transform var(--transition-base); }
+.map-legend.is-open .lg-chevron { transform: rotate(180deg); }
+.lg-body {
+  padding: 0 var(--space-3) var(--space-3);
+  max-height: 46vh; overflow-y: auto;
+}
+.lg-group-title {
+  font-family: var(--font-family-mono); font-size: 9px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: var(--space-3) 0 var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-primary);
+}
+.lg-body > .lg-group-title:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.lg-row {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10.5px; color: var(--color-text-secondary);
+  padding: 2px 0;
+}
+.lg-swatch { flex-shrink: 0; display: inline-block; }
+.lg-line { width: 15px; height: 3px; border-radius: 2px; }
+.lg-dash { width: 15px; height: 0; border-top: 2px dashed; }
+.lg-ring { width: 11px; height: 11px; border-radius: 50%; border: 1.5px dashed; }
+.lg-tri { width: 11px; height: 11px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+.lg-berg { width: 11px; height: 11px; clip-path: polygon(50% 0, 100% 75%, 70% 100%, 20% 100%, 0 70%); }
+.lg-pill { width: 15px; height: 9px; border: 1.5px solid; border-radius: 4px; background: #fff; }
+.lg-arrow { width: 14px; height: 2px; position: relative; }
+.lg-arrow::after {
+  content: ''; position: absolute; right: -1px; top: -2px;
+  border-left: 5px solid currentColor; border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent; color: inherit;
+}
+.lg-ramp { display: flex; height: 10px; border-radius: 3px; overflow: hidden; border: 1px solid var(--color-border-primary); }
+.lg-ramp-cell { flex: 1; }
+.lg-ramp-labels {
+  display: flex; justify-content: space-between; margin-top: 3px;
+  font-family: var(--font-family-mono); font-size: 8.5px; color: var(--color-text-tertiary);
+}
+.lg-diff {
+  display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 5px;
+  align-items: center; font-size: 10px; color: var(--color-text-secondary);
+}
+
+/* ── Coordinate chips ──────────────────────────────────────────── */
+.map-chips {
+  position: absolute;
+  top: var(--space-3); left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex; gap: 5px; flex-wrap: wrap; justify-content: center;
+  pointer-events: none;
+}
+.map-chip {
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-full);
+  font-family: var(--font-family-mono); font-size: 10px;
+  color: var(--color-text-secondary);
+  box-shadow: 0 1px 6px rgba(13, 27, 42, 0.12);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .map-legend { display: none; }
+  .map-chips { display: none; }
+}
