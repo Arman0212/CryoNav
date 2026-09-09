@@ -86,6 +86,9 @@ def print_banner(host: str, port: int, status: dict):
     print(f"  ► Web Application:   {app_url}")
     print(f"  ► API Documentation: {docs_url}")
     print("  ─────────────────────────────────────────────────────────────")
+    print("  Starting… loading model + data cube (~20 s). The browser opens")
+    print("  by itself once the server is actually answering.")
+    print("  ─────────────────────────────────────────────────────────────")
     print(f"  • Data Cube:        {cube_str}")
     print(f"  • Iceberg Tracks:   {berg_str}")
     print(f"  • Forecast Model:   {model_str}")
@@ -94,8 +97,15 @@ def print_banner(host: str, port: int, status: dict):
     print("=" * 66 + "\n")
 
 
-def open_browser_when_ready(url: str, check_url: str, timeout: float = 15.0):
-    """Poll the server until it actually responds with 200 OK, then launch browser."""
+def open_browser_when_ready(url: str, check_url: str, timeout: float = 180.0):
+    """
+    Poll the server until it actually answers, then launch the browser.
+
+    Cold start is dominated by imports (torch ~8 s, xarray/uvicorn ~5 s) plus
+    opening the Zarr cube, so a real-data start takes ~20 s and considerably
+    longer on a slower machine. The browser is NEVER opened speculatively: an
+    early open lands on a connection-refused page that looks like a crash.
+    """
     def _target():
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -108,11 +118,9 @@ def open_browser_when_ready(url: str, check_url: str, timeout: float = 15.0):
                         return
             except Exception:
                 time.sleep(0.3)
-        # Fallback: attempt to open anyway if timeout elapsed
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
+        print(f"\n[CryoNav] Server did not answer within {timeout:.0f}s; "
+              f"not opening a browser.\n           Once the log shows "
+              f"'Application startup complete', open {url} yourself.")
 
     thread = threading.Thread(target=_target, daemon=True)
     thread.start()
