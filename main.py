@@ -18,10 +18,12 @@ from pathlib import Path
 
 # Auto-activate .venv if running with system python
 PROJECT_ROOT = Path(__file__).resolve().parent
-venv_python = PROJECT_ROOT / ".venv" / "bin" / "python"
+_venv_bin = "Scripts" if os.name == "nt" else "bin"
+_venv_exe = "python.exe" if os.name == "nt" else "python"
+venv_python = PROJECT_ROOT / ".venv" / _venv_bin / _venv_exe
 if venv_python.exists() and (sys.prefix == sys.base_prefix):
     os.environ["VIRTUAL_ENV"] = str(PROJECT_ROOT / ".venv")
-    os.environ["PATH"] = str(PROJECT_ROOT / ".venv" / "bin") + os.pathsep + os.environ.get("PATH", "")
+    os.environ["PATH"] = str(PROJECT_ROOT / ".venv" / _venv_bin) + os.pathsep + os.environ.get("PATH", "")
     os.execv(str(venv_python), [str(venv_python)] + sys.argv)
 
 import time
@@ -74,7 +76,7 @@ def print_banner(host: str, port: int, status: dict):
     app_url = f"http://{display_host}:{port}"
     docs_url = f"http://{display_host}:{port}/docs"
     
-    cube_str = "✓ Ready" if status["cube_present"] else "⚠ Missing (run `python src/data/synthetic.py --quick`)"
+    cube_str = "✓ Ready" if status["cube_present"] else "⚠ Missing (re-run as `python main.py --quick-synth`)"
     berg_str = "✓ Ready" if status["berg_present"] else "⚠ Fallback mode"
     model_str = "✓ Trained weights found" if status["model_present"] else "ℹ Baseline / synthetic mode"
     
@@ -162,7 +164,9 @@ def main():
     if not status["cube_present"] and args.quick_synth:
         print("Data cube missing. Generating quick synthetic test cube...")
         from src.data.synthetic import build_synthetic_cube
-        build_synthetic_cube(n_days=120)
+        # Same range as `python src/data/synthetic.py --quick`: ~120 days covering
+        # the demo date the web UI opens on.
+        build_synthetic_cube(start_date="2022-12-01", end_date="2023-03-31")
         status = check_preflight_status()
 
     bind_host = "0.0.0.0" if args.public else args.host
