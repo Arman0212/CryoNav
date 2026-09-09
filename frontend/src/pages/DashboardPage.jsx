@@ -13,8 +13,10 @@ import useAlertStore from '@stores/useAlertStore';
 import useRouteStore from '@stores/useRouteStore';
 import useAppStore from '@stores/useAppStore';
 import { useObserved } from '@hooks/useObserved';
-import { useIcebergs } from '@hooks/useIcebergs';
+import { useIcebergs, useIcebergsMeta } from '@hooks/useIcebergs';
 import { useMetrics } from '@hooks/useMetrics';
+import { useOcean, useWeather } from '@hooks/useOcean';
+import { useForecast } from '@hooks/useForecast';
 import { getRiskLevel } from '@utils/colorScales';
 import { formatDistance, formatDuration } from '@utils/formatters';
 
@@ -60,6 +62,10 @@ export default function DashboardPage() {
   const observed = useObserved(selectedDate);
   const bergs = useIcebergs(selectedDate, 7);
   const metrics = useMetrics();
+  const bergsMeta = useIcebergsMeta(selectedDate, 7);
+  const forecast = useForecast(selectedDate, 7);
+  const ocean = useOcean(selectedDate, 12);
+  const weather = useWeather(selectedDate, 12);
 
   const sicCoverage = observed.data?.stats?.mean_sic;
   const activeRouteCount = routes?.comparison?.table?.filter((r) => r.success).length ?? 0;
@@ -83,29 +89,78 @@ export default function DashboardPage() {
 
   const recentAlerts = alerts.slice(0, 5);
 
+  /* Every row below is derived from what the API actually returned —
+     `source` / `is_real` flags, counts, dates. Nothing here is hardcoded,
+     because hardcoded status text goes stale the moment the data behind
+     it changes, and then the dashboard quietly lies. */
+  const q = (query, realWhen) => {
+    if (query.isLoading) return { status: 'Loading', isReal: null };
+    if (query.isError) return { status: 'Not Connected', isReal: false };
+    return { status: 'Available', isReal: realWhen(query.data) };
+  };
+
+  const seaIce = q(observed, () => true);
+  const fc = q(forecast, (d) => d?.source === 'model');
+  const berg = q(bergsMeta, (d) => d?.source === 'observed');
+  const oc = q(ocean, (d) => d?.is_real === true);
+  const wx = q(weather, (d) => d?.is_real === true);
+  const mx = q(metrics, () => true);
+
   const healthRows = [
     {
-      name: 'Sea Ice (NSIDC)', isReal: true,
-      status: observed.isError ? 'Not Connected' : observed.isLoading ? 'Loading' : 'Available',
-      lastUpdate: observed.data ? `Connected via /observed (${observed.data.date})` : observed.error?.message || 'Connected via /observed',
-    },
-    { name: 'Forecast (U-Net)', status: 'Not Trained', isReal: false, lastUpdate: 'Returns observed data (see /forecast)' },
-    {
-      name: 'Icebergs (RK4)', isReal: false,
-      status: bergs.isError ? 'Not Connected' : bergs.isLoading ? 'Loading' : 'Available',
-      lastUpdate: bergs.data ? `${bergs.data.length} synthetic bergs via /bergs` : bergs.error?.message || 'Synthetic forcing',
+      name: 'Sea Ice (NSIDC)', ...seaIce,
+      detail: observed.data
+        ? `Observed field for ${observed.data.date}`
+        : observed.error?.message || 'GET /observed',
     },
     {
-      name: 'Routing (A*)', isReal: true,
+      name: 'Forecast (U-Net)',
+      status: forecast.isError ? 'Not Connected'
+        : forecast.isLoading ? 'Loading'
+        : forecast.data?.source === 'model' ? 'Available' : 'Not Trained',
+      isReal: fc.isReal,
+      detail: forecast.data
+        ? (forecast.data.source === 'model'
+            ? `Model output, valid ${forecast.data.stats?.valid_date}`
+            : 'No cached weights — observed data returned instead')
+        : forecast.error?.message || 'GET /forecast',
+    },
+    {
+      name: 'Icebergs (drift)', ...berg,
+      detail: bergsMeta.data
+        ? `${bergsMeta.data.bergs?.length ?? 0} bergs · ${bergsMeta.data.n_ensemble}-member ensemble · source: ${bergsMeta.data.source}`
+        : bergsMeta.error?.message || 'GET /bergs',
+    },
+    {
+      name: 'Ocean (CMEMS)', ...oc,
+      detail: ocean.data
+        ? `${ocean.data.source} · ${ocean.data.date}`
+        : ocean.error?.message || 'GET /ocean',
+    },
+    {
+      name: 'Atmosphere (ERA5)', ...wx,
+      detail: weather.data
+        ? `${weather.data.source} · ${weather.data.date}`
+        : weather.error?.message || 'GET /weather',
+    },
+    {
+      name: 'Routing (A*)',
       status: routes ? 'Available' : 'Idle',
-      lastUpdate: routes ? `Last run: ${routes.origin?.name} → ${routes.destination?.name}` : 'Berg risk is wired (synthetic bergs) — run a route on the Routes page',
+      isReal: true,
+      detail: routes
+        ? `Last run: ${routes.origin?.name} → ${routes.destination?.name}`
+        : 'Run a route on the Routes page',
     },
     {
-      name: 'Metrics', isReal: true,
-      status: metrics.isError ? 'Not Connected' : metrics.isLoading ? 'Loading' : 'Available',
-      lastUpdate: metrics.data ? `skill plot: ${metrics.data.skill_plot_available ? 'yes' : 'no'}` : metrics.error?.message || 'Connected via /metrics',
+      name: 'Metrics', ...mx,
+      detail: metrics.data
+        ? (Array.isArray(metrics.data.baselines)
+            ? `${metrics.data.baselines.length} baseline rows`
+            : metrics.data.status
+              ? `${metrics.data.status} — backtest not yet run`
+              : 'Connected')
+        : metrics.error?.message || 'GET /metrics',
     },
-    { name: 'Ocean (CMEMS)', status: 'Not Connected', isReal: false, lastUpdate: 'No /ocean route on backend' },
   ];
 
   return (
@@ -201,17 +256,17 @@ export default function DashboardPage() {
               <tr key={row.name}>
                 <td>{row.name}</td>
                 <td>
-                  <span className={`badge ${row.status === 'Available' ? 'badge-success' : row.status === 'Partial' || row.status === 'Loading' || row.status === 'Idle' ? 'badge-warning' : 'badge-danger'}`}>
+                  <span className={`badge ${row.status === 'Available' ? 'badge-success' : (row.status === 'Loading' || row.status === 'Idle' || row.status === 'Not Trained') ? 'badge-warning' : 'badge-danger'}`}>
                     {row.status}
                   </span>
                 </td>
                 <td>
-                  <div className={`data-quality ${row.isReal ? 'real' : 'synthetic'}`}>
+                  <div className={`data-quality ${row.isReal === true ? 'real' : row.isReal === false ? 'synthetic' : 'unavailable'}`}>
                     <span className="data-quality-dot" />
-                    <span>{row.isReal ? 'Real' : 'Synthetic'}</span>
+                    <span>{row.isReal === true ? 'Real' : row.isReal === false ? 'Synthetic' : '—'}</span>
                   </div>
                 </td>
-                <td style={{ color: 'var(--color-text-secondary)' }}>{row.lastUpdate}</td>
+                <td style={{ color: 'var(--color-text-secondary)' }}>{row.detail}</td>
               </tr>
             ))}
           </tbody>
