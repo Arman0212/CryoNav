@@ -90,6 +90,10 @@ python scripts/download_data.py --gdrive-id 1EE-ggmzrbKDD69qupAt0ck8DhfhHytu8
 # Option B: Verify existing local datasets
 python scripts/download_data.py --verify
 
+# Option C: Fetch from your own HTTP mirror, if you host one
+CRYONAV_CUBE_URL=https://your-host/antarctic_cube_2017_2024.tar.gz \
+  python scripts/download_data.py --all
+
 # Option C: Synthetic fallback mode (for offline/instant lightweight testing)
 PYTHONPATH=. python src/data/synthetic.py --quick   # ~120 days, ~250 MB, ~3 s
 PYTHONPATH=. python src/data/synthetic.py           # full range, ~5.6 GB

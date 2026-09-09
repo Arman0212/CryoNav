@@ -40,11 +40,15 @@ PACKAGE_ARCHIVE = PROCESSED_DIR / "antarctic_cube_2017_2024.tar.gz"
 # Default Hosted Storage Configuration (Google Drive / Hugging Face)
 # When you upload to Google Drive, set GDRIVE_FILE_ID or pass --gdrive-id <ID>
 DEFAULT_GDRIVE_FILE_ID = os.environ.get("CRYONAV_GDRIVE_ID", "")
-DEFAULT_MIRROR_URLS = {
-    "cube": "https://huggingface.co/datasets/cryonav/antarctic-sea-ice/resolve/main/antarctic_cube_2017_2024.tar.gz",
-    "bergs": "https://huggingface.co/datasets/cryonav/antarctic-sea-ice/resolve/main/tracked_icebergs_2017_2024.parquet",
-    "models": "https://huggingface.co/datasets/cryonav/antarctic-sea-ice/resolve/main/unet_v1_weights.pt",
-}
+# Optional HTTP mirror for the cube archive. There is no default: the previous
+# hard-coded huggingface.co/datasets/cryonav/antarctic-sea-ice returns 401 (the
+# repo does not exist), so `--all` failed with a confusing auth error instead of
+# saying no mirror was configured. Set CRYONAV_CUBE_URL to a direct-download URL
+# to enable `--all`; otherwise use --gdrive-id.
+#
+# The berg tracks and model weights that used to be listed here now ship in the
+# repository itself, so they need no mirror at all.
+DEFAULT_CUBE_URL = os.environ.get("CRYONAV_CUBE_URL", "")
 
 
 def download_from_google_drive(file_id: str, destination: Path):
@@ -266,9 +270,16 @@ if __name__ == "__main__":
             extract_archive(target_archive, PROCESSED_DIR)
             verify_local_data()
     elif args.all:
-        print("Syncing dataset from cloud mirror...")
+        if not DEFAULT_CUBE_URL:
+            print("No HTTP mirror is configured for the data cube.\n"
+                  "  Either set CRYONAV_CUBE_URL to a direct-download URL, or use:\n"
+                  "    python scripts/download_data.py --gdrive-id <FILE_ID>\n"
+                  "  The berg tracks, model weights and validation record already\n"
+                  "  ship in this repository — only the 5.4 GB cube needs fetching.")
+            sys.exit(1)
+        print(f"Syncing dataset from {DEFAULT_CUBE_URL} ...")
         target_archive = PROCESSED_DIR / "antarctic_cube_2017_2024.tar.gz"
-        if download_file_with_progress(DEFAULT_MIRROR_URLS["cube"], target_archive):
+        if download_file_with_progress(DEFAULT_CUBE_URL, target_archive):
             extract_archive(target_archive, PROCESSED_DIR)
             verify_local_data()
     else:
