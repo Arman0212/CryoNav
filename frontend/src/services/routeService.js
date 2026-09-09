@@ -26,6 +26,7 @@ const routeService = {
    * @param {number} [params.wTime=1.0] - Time cost weight
    * @param {number} [params.wFuel=0.5] - Fuel cost weight
    * @param {number} [params.wRisk=2.0] - Risk cost weight
+   * @param {number} [params.bergLimit=8] - How many of the largest bergs feed the risk field
    * @returns {Promise<{routes: object, comparison: object, origin: object, destination: object, depart_date: string}>}
    */
   async calculateRoute({
@@ -35,6 +36,7 @@ const routeService = {
     wTime = 1.0,
     wFuel = 0.5,
     wRisk = 2.0,
+    bergLimit = 8,
   } = {}) {
     /* The A* search runs synchronously over the 5.4 GB cube. On a departure
        date with no cached forecast it measures ~55 s cold, which blows past
@@ -48,6 +50,7 @@ const routeService = {
       w_time: wTime,
       w_fuel: wFuel,
       w_risk: wRisk,
+      berg_limit: bergLimit,
     }, { timeout: 180000 });
     return data;
   },

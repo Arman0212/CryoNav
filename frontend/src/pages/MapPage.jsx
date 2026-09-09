@@ -29,6 +29,10 @@ import useAppStore from '@stores/useAppStore';
 import useMapStore from '@stores/useMapStore';
 import useRouteStore from '@stores/useRouteStore';
 import { useIcebergs } from '@hooks/useIcebergs';
+import { useGrid } from '@hooks/useGrid';
+import { useObserved } from '@hooks/useObserved';
+import { useForecast } from '@hooks/useForecast';
+import SicCanvasLayer from '@components/map/SicCanvasLayer';
 import {
   MAP_DEFAULTS, RESEARCH_STATIONS, MAP_LAYERS, BASEMAPS,
   POLAR_BASEMAPS, POLAR_OVERLAYS, GIBS_ATTRIBUTION,
@@ -37,7 +41,10 @@ import {
 import { EPSG3031, GIBS_TILE_SIZE, GIBS_MAX_ZOOM } from '@utils/antarcticCrs';
 import { formatDistance, formatDuration } from '@utils/formatters';
 
-const LIVE_LAYER_IDS = new Set(['icebergs', 'routes', 'stations']);
+/* Layers with a real backend data source behind them. Sea ice joined this
+   set once GET /grid arrived — the grid geometry it needs used to be
+   buried in each /forecast response. */
+const LIVE_LAYER_IDS = new Set(['icebergs', 'routes', 'stations', 'seaIce', 'seaIceForecast']);
 
 const ROUTE_COLORS = {
   great_circle: '#6d3fd4',
@@ -83,6 +90,13 @@ export default function MapPage() {
   const routeResult = useRouteStore((s) => s.routes);
 
   const { data: bergs } = useIcebergs(selectedDate, 7);
+
+  /* Grid geometry is fetched once and reused by every raster layer.
+     Sea-ice fields are only requested when their layer is switched on, so
+     toggling the map doesn't pull megabytes nobody is looking at. */
+  const { data: grid } = useGrid();
+  const observed = useObserved(layers.seaIce ? selectedDate : null);
+  const forecast = useForecast(layers.seaIceForecast ? selectedDate : null, 7);
 
   const [projection, setProjection] = useState('polar');
   const [basemapId, setBasemapId] = useState(MAP_DEFAULTS.basemap);
@@ -139,6 +153,15 @@ export default function MapPage() {
             attribution={basemap.attribution}
             maxZoom={basemap.maxZoom ?? MAP_DEFAULTS.maxZoom}
           />
+        )}
+
+        {/* Observed sea ice, then forecast on top at reduced opacity so the
+            two can be compared directly rather than toggled between. */}
+        {layers.seaIce && grid && observed.data?.sic && (
+          <SicCanvasLayer sic={observed.data.sic} grid={grid} />
+        )}
+        {layers.seaIceForecast && grid && forecast.data?.sic && (
+          <SicCanvasLayer sic={forecast.data.sic} grid={grid} opacity={0.65} />
         )}
 
         {layers.stations && RESEARCH_STATIONS.map((s) => (

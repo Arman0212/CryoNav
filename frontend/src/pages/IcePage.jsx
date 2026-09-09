@@ -58,7 +58,7 @@ export default function IcePage() {
             <Snowflake size={32} style={{ color: 'var(--color-accent-cyan)', opacity: 0.4 }} />
             <SicStats query={observed} label="observed SIC" />
             <p className="empty-state-description" style={{ marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)' }}>
-              Grid heatmap rendering ({observed.data?.shape?.join('×') || '264×220'} cells) not yet built — stats above come straight from GET /observed.
+              {observed.data?.shape?.join(' × ') || 'Domain'} grid. Rendered as a raster on the Map page; the figures above come straight from GET /observed.
             </p>
           </div>
         </div>
@@ -67,7 +67,19 @@ export default function IcePage() {
         <div className="card">
           <div className="card-header">
             <div className="card-title"><Brain size={16} /> Forecast SIC</div>
-            <div className="data-quality synthetic"><span className="data-quality-dot" /><span>Demo (U-Net not trained)</span></div>
+            {/* The backend tells us whether this is a real model run or
+                observed data standing in for one. Saying so is the whole
+                point — a fallback presented as a forecast is a lie. */}
+            {forecast.data?.source === 'model' ? (
+              <div className="data-quality real">
+                <span className="data-quality-dot" /><span>U-Net model output</span>
+              </div>
+            ) : (
+              <div className="data-quality synthetic">
+                <span className="data-quality-dot" />
+                <span>{forecast.data ? 'Observed fallback — no cached weights' : 'Awaiting forecast'}</span>
+              </div>
+            )}
           </div>
           <div className="empty-state" style={{ padding: 'var(--space-8)', alignItems: 'center' }}>
             <Brain size={32} style={{ color: 'var(--color-accent-purple)', opacity: 0.4 }} />
@@ -81,7 +93,11 @@ export default function IcePage() {
             </div>
             <SicStats query={forecast} label="forecast SIC" />
             <p className="empty-state-description" style={{ marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)' }}>
-              GET /forecast currently returns observed data shifted by the lead — there's no trained model behind it yet.
+              {forecast.data?.stats?.valid_date
+                ? `Initialised ${selectedDate}, valid ${forecast.data.stats.valid_date}.`
+                : 'Initialised on the selected date.'}
+              {forecast.data?.source === 'observed_fallback'
+                && ' No cached model weights for this date, so observed data is shown in place of a forecast.'}
             </p>
           </div>
         </div>
@@ -91,7 +107,7 @@ export default function IcePage() {
       <div className="card">
         <div className="card-header">
           <div className="card-title"><BarChart3 size={16} /> Forecast Skill</div>
-          <span className="model-tag">unet-v1 · not trained</span>
+          <span className="model-tag">U-Net · vs. 4 baselines</span>
         </div>
         <div className="grid-3" style={{ padding: 'var(--space-4) 0' }}>
           {['RMSE', 'MAE', 'IIEE', 'F1 Score', 'Precision', 'Recall'].map((metric) => (
@@ -102,7 +118,7 @@ export default function IcePage() {
           ))}
         </div>
         <div className="card-footer" style={{ textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-sm)' }}>
-          There is no per-lead skill endpoint on the backend yet (GET /metrics only returns baselines.csv / training_history.json if present on disk). See the Analytics page for what /metrics does expose.
+          Per-lead scores come from GET /metrics, which returns the backtest rows (model, lead_day, rmse, mae, iiee, ice_edge_error) once they have been generated. See the Analytics page for what the endpoint currently reports.
         </div>
       </div>
     </div>

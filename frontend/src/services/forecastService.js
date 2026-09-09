@@ -7,13 +7,28 @@ import apiClient from './api';
 
 const forecastService = {
   /**
-   * Get SIC forecast for a given date and lead time.
-   * NOTE: the backend currently returns OBSERVED data as the "forecast"
-   * (the demo has no trained model wired in yet) — see main.py get_forecast().
+   * Get the SIC forecast for an initialisation date and lead day.
    *
-   * @param {string} date - ISO date string (YYYY-MM-DD), used as the base date
-   * @param {number} [lead=7] - Forecast lead in days (backend default is 7)
-   * @returns {Promise<{sic: number[][], shape: number[], lat: number[][], lon: number[][], land_mask: number[][], stats: object}>}
+   * The response no longer carries `lat`/`lon`/`land_mask` — the backend
+   * moved that geometry to GET /grid so the lead-day animation isn't
+   * re-downloading coordinates fourteen times. Pair this with useGrid().
+   *
+   * IMPORTANT — check `source` before presenting the field as a forecast:
+   *   "model"             → produced by the trained U-Net
+   *   "observed_fallback" → no cached weights for this date, so real
+   *                         observed data is returned instead. The UI must
+   *                         say so rather than passing it off as a forecast.
+   *
+   * The field is initialised on `date` and valid at `stats.valid_date`
+   * (= date + lead), which is the date to request from /observed when
+   * computing forecast error.
+   *
+   * @param {string} date - Initialisation date (YYYY-MM-DD)
+   * @param {number} [lead=7] - Lead in days, 1..14
+   * When `source` is "observed_fallback" the response also carries a
+   * human-readable `warning` explaining why.
+   *
+   * @returns {Promise<{sic: number[][], shape: number[], source: 'model'|'observed_fallback', warning?: string, stats: {init_date: string, valid_date: string, lead_day: number, mean_sic: number}}>}
    */
   async getForecast(date, lead = 7) {
     const { data } = await apiClient.get('/forecast', {

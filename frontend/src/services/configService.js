@@ -18,18 +18,20 @@ const configService = {
   },
 
   /**
-   * Extract the domain's spatial bounds from /config.
-   * NOTE: grid resolution (25km) and grid shape (264x220) are defined in
-   * config/domain.yaml but are NOT included in the /config API response —
-   * they're returned here as static fallbacks documented in that file,
-   * not live data.
+   * Domain bounds from /config, combined with the real grid geometry from
+   * GET /grid. The shape and cell size are now live values rather than the
+   * constants this used to hardcode — /grid is the authority.
    */
   async getGridInfo() {
-    const { data } = await apiClient.get('/config');
+    const [{ data: config }, { data: grid }] = await Promise.all([
+      apiClient.get('/config'),
+      apiClient.get('/grid'),
+    ]);
     return {
-      bounds: data.region, // { name, lon_min, lon_max, lat_min, lat_max }
-      gridResolutionKm: 25, // static — not exposed by /config
-      gridShape: [264, 220], // static — not exposed by /config
+      bounds: config.region,              // { name, lon_min, lon_max, lat_min, lat_max }
+      gridResolutionKm: grid.cell_size_km,
+      gridShape: grid.shape,              // from the cube; do not hardcode
+      bathymetrySource: grid.bathymetry_source,
     };
   },
 

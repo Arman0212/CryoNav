@@ -14,17 +14,35 @@ import apiClient from './api';
 
 const icebergService = {
   /**
-   * Get all tracked icebergs for a given date.
+   * Get tracked icebergs for a date, with their drift ensembles.
    *
-   * @param {string} [date='2023-01-20'] - ISO date string (backend default)
-   * @param {number} [horizon=7] - Forecast/track horizon in days (max 14 server-side)
-   * @returns {Promise<Array>} Array of { berg_id, mean_track, ensemble, length_m, width_m }
+   * `mean_track` entries are [day, lat, lon] arrays — note the integration
+   * guide describes them as {day, lat, lon} objects, but src/api/main.py
+   * indexes them positionally (mean_track[-1][1]), so arrays are correct.
+   *
+   * @param {string} [date='2023-01-13'] - Drift start date (backend default)
+   * @param {number} [horizon=7] - Days to propagate
+   * @param {number} [limit=8] - Number of largest bergs to return
+   * @returns {Promise<Array>} [{ berg_id, mean_track, ensemble, length_m, width_m,
+   *                              observed_on, final_position }]
    */
-  async getIcebergs(date = '2023-01-20', horizon = 7) {
+  async getIcebergs(date = '2023-01-13', horizon = 7, limit = 8) {
     const { data } = await apiClient.get('/bergs', {
-      params: { date, horizon },
+      params: { date, horizon, limit },
     });
     return data.bergs;
+  },
+
+  /**
+   * Same request, but keeping the envelope — `source` names the dataset
+   * behind the bergs and `n_ensemble` how many members were propagated,
+   * both of which the UI should show rather than hide.
+   */
+  async getIcebergsWithMeta(date = '2023-01-13', horizon = 7, limit = 8) {
+    const { data } = await apiClient.get('/bergs', {
+      params: { date, horizon, limit },
+    });
+    return data;
   },
 
   /**

@@ -1,227 +1,213 @@
-/* ═══════════════════════════════════════════════════════════════
-   demoTrajectory — REAL CryoNav backend geometry, baked at build time.
+/* ═══ demoTrajectory — REAL CryoNav backend geometry, baked at build time.
 
-   Generated from the live API (GET /bergs, POST /route, GET /observed)
-   on the held-out demo date 2023-01-20, then projected into scene space:
+   Regenerated against the merged backend (2017–2024 cube, 50-member drift
+   ensemble) from GET /bergs, POST /route and GET /observed on 2023-01-13:
 
      · A window of the real `balanced` corridor around the point where it
        passes closest to BERG_001 — true bearing and shape preserved.
-     · The real `min_ice` corridor as the genuine alternative route. The
-       re-route in this experience is the router's own answer, not art.
-     · The berg's real `mean_track`, and an uncertainty radius per step
-       taken from the real 10-member drift ensemble.
+     · The real `min_ice` corridor as the alternative route. The re-route
+       in this experience is the router's own answer, not art.
+     · The berg's real mean_track, with an uncertainty radius per step
+       derived from the real 50-member ensemble spread.
 
-   One deliberate distortion, stated plainly: berg drift is amplified
-   26x so that 48 hours of real movement (a few km) reads at the scale of
-   the scene. Bearings, relative timing and route shape are untouched.
-   The HUD labels the experience as a visualisation for this reason.
+   One deliberate distortion, stated plainly: berg drift is amplified 26x
+   so 48 hours of real movement (a few km) reads at scene scale. Bearings,
+   relative timing and route shape are untouched — which is why the HUD
+   labels the experience a visualisation.
 
-   This snapshot is the offline fallback — MissionController prefers live
-   API data when the backend is reachable.
-   ═══════════════════════════════════════════════════════════════ */
+   Offline fallback; MissionController prefers live API data when reachable.
+   ═══ */
 
 const demoTrajectory = {
-  "source": "CryoNav backend \u2014 GET /bergs, POST /route, GET /observed (2023-01-20)",
+  "source": "CryoNav backend \u2014 GET /bergs, POST /route, GET /observed (2023-01-13)",
   "anchor": {
-    "lat": -58.4474,
-    "lon": 45.8447
+    "lat": -63.6847,
+    "lon": 43.8119
   },
-  "sceneScale": 0.5754,
+  "sceneScale": 0.4971,
   "driftAmplification": 26.0,
   "route": [
     [
-      -300.0,
-      -158.14
+      -237.28,
+      -137.26
     ],
     [
-      -278.57,
-      -144.59
+      -229.33,
+      -127.09
     ],
     [
-      -257.14,
-      -131.04
+      -217.59,
+      -116.31
     ],
     [
-      -214.29,
-      -103.94
+      -180.0,
+      -92.8
     ],
     [
-      -192.86,
-      -90.4
+      -157.42,
+      -80.91
     ],
     [
-      -171.43,
-      -76.85
+      -134.22,
+      -69.34
     ],
     [
-      -150.0,
-      -63.3
+      -110.93,
+      -58.19
     ],
     [
-      -107.14,
-      -37.05
+      -70.39,
+      -37.43
     ],
     [
-      -85.71,
-      -25.83
+      -56.9,
+      -27.92
     ],
     [
-      -64.29,
-      -16.73
+      -47.17,
+      -18.8
     ],
     [
-      -42.86,
-      -9.22
+      -38.87,
+      -9.84
     ],
     [
-      -21.43,
-      -2.34
+      -30.73,
+      -0.94
     ],
     [
-      21.43,
-      11.21
+      -13.87,
+      16.73
     ],
     [
-      42.86,
-      17.99
+      -3.47,
+      25.5
     ],
     [
-      64.29,
-      24.76
+      11.19,
+      34.2
     ],
     [
-      85.71,
-      31.64
+      31.57,
+      42.75
     ],
     [
-      107.14,
-      39.15
+      56.34,
+      50.98
     ],
     [
-      150.0,
-      59.48
+      110.36,
+      66.1
     ],
     [
-      171.43,
-      72.28
+      137.94,
+      72.9
     ],
     [
-      192.86,
-      85.73
+      165.8,
+      79.2
     ],
     [
-      214.29,
-      99.27
+      193.92,
+      84.96
     ],
     [
-      257.14,
-      126.37
+      250.54,
+      94.95
     ],
     [
-      278.57,
-      139.92
+      277.31,
+      99.51
     ],
     [
       300.0,
-      153.46
+      104.43
     ]
   ],
   "altRoute": [
     [
-      600.0,
-      -192.01
+      2.58,
+      -165.19
     ],
     [
-      600.0,
-      -178.46
+      17.77,
+      -148.13
     ],
     [
-      600.0,
-      -158.14
+      33.31,
+      -131.22
     ],
     [
-      600.0,
-      -144.59
+      49.19,
+      -114.48
     ],
     [
-      600.0,
-      -131.04
+      65.44,
+      -97.92
     ],
     [
-      600.0,
-      -110.72
+      82.04,
+      -81.53
     ],
     [
-      600.0,
-      -97.17
+      98.78,
+      -65.05
     ],
     [
-      600.0,
-      -83.62
+      114.93,
+      -47.62
     ],
     [
-      600.0,
-      -63.3
+      130.25,
+      -28.95
     ],
     [
-      600.0,
-      -49.75
+      145.99,
+      -10.46
     ],
     [
-      600.0,
-      -36.21
+      163.34,
+      6.4
     ],
     [
-      600.0,
-      -15.88
+      182.09,
+      21.91
     ],
     [
-      600.0,
-      -2.34
+      201.5,
+      36.9
     ],
     [
-      600.0,
-      17.99
+      221.34,
+      51.64
     ],
     [
-      600.0,
-      31.53
+      241.84,
+      65.81
     ],
     [
-      600.0,
-      45.08
+      263.68,
+      78.43
     ],
     [
-      600.0,
-      65.4
+      287.1,
+      89.2
     ],
     [
-      600.0,
-      78.95
+      310.93,
+      99.64
     ],
     [
-      600.0,
-      92.5
+      334.05,
+      111.32
     ],
     [
-      600.0,
-      112.82
+      356.68,
+      123.92
     ],
     [
-      600.0,
-      126.37
-    ],
-    [
-      600.0,
-      139.92
-    ],
-    [
-      602.68,
-      161.09
-    ],
-    [
-      624.11,
-      181.41
+      379.54,
+      136.51
     ]
   ],
   "berg": {
@@ -232,85 +218,85 @@ const demoTrajectory = {
       {
         "t": 0,
         "pos": [
-          -212.71,
-          419.11
+          -105.8,
+          74.18
         ]
       },
       {
         "t": 24,
         "pos": [
-          122.68,
-          469.94
+          -23.5,
+          288.97
         ]
       },
       {
         "t": 48,
         "pos": [
-          485.85,
-          521.17
+          45.72,
+          480.5
         ]
       },
       {
         "t": 72,
         "pos": [
-          867.28,
-          572.02
+          115.36,
+          514.48
         ]
       },
       {
         "t": 96,
         "pos": [
-          1252.66,
-          623.09
+          262.67,
+          502.22
         ]
       },
       {
         "t": 120,
         "pos": [
-          1625.54,
-          674.7
+          381.73,
+          488.73
         ]
       },
       {
         "t": 144,
         "pos": [
-          1971.45,
-          726.01
+          395.93,
+          472.09
         ]
       },
       {
         "t": 168,
         "pos": [
-          2288.1,
-          777.23
+          511.91,
+          374.39
         ]
       }
     ],
     "spread": [
       0.0,
-      4.96,
-      8.11,
-      11.33,
-      14.02,
-      15.71,
-      15.24,
-      16.33
+      4.55,
+      6.94,
+      7.36,
+      7.73,
+      9.12,
+      9.08,
+      9.19
     ],
-    "members": 10
+    "members": 50
   },
-  "seaIce": 0.1931,
+  "seaIce": 0.0583,
   "metrics": {
     "min_ice": {
-      "distance_nm": 3147.6,
-      "time_h": 240.5,
-      "fuel_t": 276.3,
-      "ice_h": 43.6
+      "distance_nm": 3214.8,
+      "time_h": 231.1,
+      "fuel_t": 246.7,
+      "ice_h": 3.2
     },
     "balanced": {
-      "distance_nm": 2778.8,
-      "time_h": 211.4,
-      "fuel_t": 247.4,
-      "ice_h": 54.6
+      "distance_nm": 3049.1,
+      "time_h": 219.1,
+      "fuel_t": 233.3,
+      "ice_h": 3.2
     }
   }
 };
