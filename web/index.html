@@ -6,7 +6,7 @@
     <title>CryoNav — Antarctic Navigation Decision Support</title>
     <meta name="description" content="AI-enabled sea-ice forecasting, iceberg trajectory prediction, and optimal route planning for Antarctic navigation.">
     
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="styles.css?v=4">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
@@ -34,13 +34,16 @@
                     <div class="subtitle">Antarctic Navigation Decision Support</div>
                 </div>
             </div>
-            <div class="header-status">
+            <div class="header-status" style="display: flex; align-items: center; gap: 12px;">
+                <button class="btn" id="btn-provenance" onclick="openProvenanceModal()" style="padding: 6px 14px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(0, 212, 255, 0.4); background: rgba(0, 212, 255, 0.12); color: #00d4ff; border-radius: 6px; cursor: pointer; transition: all 0.2s ease;">
+                    <span>🛡 Real Data Provenance</span>
+                </button>
                 <div class="status-indicator">
                     <span class="status-dot"></span>
                     <span id="status-text">System Ready</span>
                 </div>
                 <div class="status-indicator" style="color: var(--text-muted);">
-                    <span>v1.0</span>
+                    <span>v1.0 (EPSG:3031)</span>
                 </div>
             </div>
         </header>
@@ -55,18 +58,57 @@
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label" for="select-origin">Origin</label>
+                    <label class="form-label" for="select-origin">Origin / Departure Port</label>
                     <select class="form-select" id="select-origin">
-                        <option value="cape_town">Cape Town (33.9°S 18.4°E)</option>
-                        <option value="mid_ocean_waypoint">Mid-Ocean Waypoint (55°S 76°E)</option>
+                        <optgroup label="International Gateway Ports">
+                            <option value="cape_town" selected>Cape Town, South Africa (33.9°S 18.4°E)</option>
+                            <option value="hobart">Hobart, Australia (42.9°S 147.3°E)</option>
+                            <option value="christchurch">Christchurch, New Zealand (43.6°S 172.7°E)</option>
+                            <option value="ushuaia">Ushuaia, Argentina (54.8°S 68.3°W)</option>
+                            <option value="punta_arenas">Punta Arenas, Chile (53.2°S 70.9°W)</option>
+                            <option value="fremantle">Fremantle / Perth, Australia (32.1°S 115.7°E)</option>
+                            <option value="mid_ocean_waypoint">Mid-Ocean Waypoint (55.0°S 76.0°E)</option>
+                        </optgroup>
+                        <optgroup label="Inter-Station Transfers">
+                            <option value="bharati">Bharati Station (69.4°S 76.2°E)</option>
+                            <option value="maitri">Maitri Station (70.0°S 11.5°E)</option>
+                            <option value="mcmurdo">McMurdo Station (77.9°S 166.7°E)</option>
+                            <option value="davis">Davis Station (68.6°S 78.0°E)</option>
+                            <option value="casey">Casey Station (66.3°S 110.5°E)</option>
+                            <option value="rothera">Rothera Station (67.6°S 68.1°W)</option>
+                        </optgroup>
                     </select>
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label" for="select-dest">Destination</label>
+                    <label class="form-label" for="select-dest">Destination Outpost / Station</label>
                     <select class="form-select" id="select-dest">
-                        <option value="bharati">Bharati Station (69.4°S 76.2°E)</option>
-                        <option value="maitri">Maitri Station (70.0°S 11.5°E)</option>
+                        <optgroup label="Indian Antarctic Outposts">
+                            <option value="bharati" selected>Bharati Station · India (69.4°S 76.2°E)</option>
+                            <option value="maitri">Maitri Station · India (70.0°S 11.5°E)</option>
+                        </optgroup>
+                        <optgroup label="Ross Sea & McMurdo Sound">
+                            <option value="mcmurdo">McMurdo Station · USA (77.9°S 166.7°E)</option>
+                            <option value="zucchelli">Mario Zucchelli · Italy (74.7°S 164.1°E)</option>
+                        </optgroup>
+                        <optgroup label="East Antarctica & Prydz Bay / Wilkes">
+                            <option value="davis">Davis Station · Australia (68.6°S 78.0°E)</option>
+                            <option value="casey">Casey Station · Australia (66.3°S 110.5°E)</option>
+                            <option value="mawson">Mawson Station · Australia (67.6°S 62.9°E)</option>
+                            <option value="mirny">Mirny Station · Russia (66.6°S 93.0°E)</option>
+                            <option value="zhongshan">Zhongshan Station · China (69.4°S 76.4°E)</option>
+                        </optgroup>
+                        <optgroup label="Dronning Maud Land & Atlantic Sector">
+                            <option value="neumayer">Neumayer Station III · Germany (70.7°S 8.3°W)</option>
+                            <option value="troll">Troll Station · Norway (72.0°S 2.5°E)</option>
+                            <option value="syowa">Syowa Station · Japan (69.0°S 39.6°E)</option>
+                        </optgroup>
+                        <optgroup label="Antarctic Peninsula & Weddell Sea">
+                            <option value="rothera">Rothera Station · UK (67.6°S 68.1°W)</option>
+                            <option value="palmer">Palmer Station · USA (64.8°S 64.1°W)</option>
+                            <option value="halley">Halley VI Station · UK (75.6°S 26.2°W)</option>
+                            <option value="esperanza">Esperanza Base · Argentina (63.4°S 57.0°W)</option>
+                        </optgroup>
                     </select>
                 </div>
                 
@@ -150,6 +192,20 @@
                     <div class="toggle-switch active" id="toggle-bergs"></div>
                 </div>
                 
+                <div class="layer-toggle" onclick="toggleLayer('bathy')">
+                    <span class="toggle-label">
+                        <span style="color: #4da6ff;">🌊</span> GEBCO Bathymetry (IBCSO v2)
+                    </span>
+                    <div class="toggle-switch" id="toggle-bathy"></div>
+                </div>
+
+                <div class="layer-toggle" onclick="toggleLayer('live_bergs')">
+                    <span class="toggle-label">
+                        <span style="color: #ff4757;">📍</span> Live US NIC Bergs (Sep 2026)
+                    </span>
+                    <div class="toggle-switch active" id="toggle-live-bergs"></div>
+                </div>
+
                 <div class="layer-toggle" onclick="toggleLayer('routes')">
                     <span class="toggle-label">
                         <span style="color: var(--success-green);">━</span> Routes
@@ -188,6 +244,30 @@
                     📊 Load Forecast
                 </button>
             </div>
+
+            <!-- Iceberg Drift Horizon Control -->
+            <div class="control-section animate-in" style="animation-delay: 0.35s">
+                <div class="section-header">
+                    <div class="section-icon">🧊</div>
+                    <span class="section-title">Iceberg Drift Horizon</span>
+                </div>
+                
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label class="form-label" style="margin: 0;">Physics Drift Window</label>
+                        <span id="berg-horizon-badge" style="font-size: 11px; font-weight: 700; color: #00f2fe; background: rgba(0, 242, 254, 0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(0, 242, 254, 0.3);">7 Days</span>
+                    </div>
+                    <input type="range" id="slider-berg-horizon" min="1" max="60" step="1" value="7"
+                           oninput="updateBergHorizon(this.value)" style="width: 100%;">
+                    <div style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary berg-preset-btn active" id="btn-bh-7" style="font-size: 10px; padding: 4px 8px; flex: 1;" onclick="setBergHorizon(7)">7d</button>
+                        <button class="btn btn-secondary berg-preset-btn" id="btn-bh-14" style="font-size: 10px; padding: 4px 8px; flex: 1;" onclick="setBergHorizon(14)">14d</button>
+                        <button class="btn btn-secondary berg-preset-btn" id="btn-bh-30" style="font-size: 10px; padding: 4px 8px; flex: 1;" onclick="setBergHorizon(30)">30d</button>
+                        <button class="btn btn-primary berg-preset-btn" id="btn-bh-50" style="font-size: 10px; padding: 4px 8px; flex: 1.2; background: rgba(0, 242, 254, 0.22); border-color: #00f2fe; color: #00f2fe; font-weight: 700;" onclick="setBergHorizon(50)">50d 🚀</button>
+                        <button class="btn btn-secondary berg-preset-btn" id="btn-bh-60" style="font-size: 10px; padding: 4px 8px; flex: 1;" onclick="setBergHorizon(60)">60d</button>
+                    </div>
+                </div>
+            </div>
         </aside>
 
         <!-- MAP -->
@@ -195,11 +275,20 @@
             <div id="map-canvas"></div>
             
             <div class="map-overlay">
-                <div class="map-chip" id="chip-coords">
-                    📍 Indian Ocean Sector · 20°W–120°E · 50°S–78°S
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <div class="map-chip" id="chip-coords">
+                        📍 Indian Ocean Sector · 20°W–120°E · 50°S–78°S
+                    </div>
+                    <div class="map-chip" id="chip-forecast-info" style="display:none;">
+                        🔮 Forecast: <span id="forecast-date-display"></span>
+                    </div>
                 </div>
-                <div class="map-chip" id="chip-forecast-info" style="display:none;">
-                    🔮 Forecast: <span id="forecast-date-display"></span>
+                
+                <!-- Photorealistic Basemap Switcher -->
+                <div class="basemap-selector" id="basemap-selector">
+                    <button class="basemap-btn active" id="btn-bm-satellite" onclick="switchBasemap('satellite')" title="Photorealistic Satellite Imagery">🛰️ Satellite</button>
+                    <button class="basemap-btn" id="btn-bm-ocean" onclick="switchBasemap('ocean')" title="NOAA / GEBCO Ocean Bathymetry">🌊 Ocean Depth</button>
+                    <button class="basemap-btn" id="btn-bm-dark" onclick="switchBasemap('dark')" title="High-contrast Tactical Dark">🌑 Dark Radar</button>
                 </div>
             </div>
             
@@ -286,9 +375,12 @@
 
             <!-- Forecast Skill -->
             <div class="control-section animate-in" style="animation-delay: 0.3s">
-                <div class="section-header">
-                    <div class="section-icon">🎯</div>
-                    <span class="section-title">Forecast Skill</span>
+                <div class="section-header" style="justify-content: space-between;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div class="section-icon">🎯</div>
+                        <span class="section-title">Forecast Skill</span>
+                    </div>
+                    <span style="font-size: 10px; color: #2ed573; background: rgba(46, 213, 115, 0.15); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(46, 213, 115, 0.3);">2024 Held-Out</span>
                 </div>
                 
                 <div class="metric-grid">
@@ -298,17 +390,21 @@
                     </div>
                     <div class="metric-card">
                         <div class="metric-value" id="metric-iiee">—</div>
-                        <div class="metric-label">IIEE (×10³ km²)</div>
+                        <div class="metric-label">IIEE (Day 7 km²)</div>
                     </div>
                     <div class="metric-card">
-                        <div class="metric-value" id="metric-skill">—</div>
-                        <div class="metric-label">Skill vs DAP</div>
+                        <div class="metric-value" id="metric-skill" style="color: #2ed573;">—</div>
+                        <div class="metric-label">Skill vs Pers</div>
                     </div>
                     <div class="metric-card">
-                        <div class="metric-value" id="metric-f1">—</div>
-                        <div class="metric-label">Edge F1 (15%)</div>
+                        <div class="metric-value" id="metric-clim" style="color: #00d4ff;">—</div>
+                        <div class="metric-label">Skill vs Clim</div>
                     </div>
                 </div>
+
+                <button onclick="openSkillModal()" class="btn btn-secondary" style="width: 100%; margin-top: 10px; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid rgba(0, 212, 255, 0.3); background: rgba(13, 23, 48, 0.8);">
+                    <span>📊</span> View 14-Day Validation Harness
+                </button>
             </div>
 
             <!-- Route Legend -->
@@ -348,11 +444,56 @@
 
         <!-- FOOTER -->
         <footer class="footer">
-            <span>CryoNav · Antarctic Decision Support System · NSIDC CDR v6 · ERA5 · GLORYS12</span>
-            <span>Indian Ocean Sector · 25 km Polar Stereographic · EPSG:3412</span>
+            <span>CryoNav · Antarctic Decision Support System · NSIDC-0079 · AWI CS2/SMOS · ERA5 · GLORYS12 · GEBCO/IBCSO</span>
+            <span>Southern Ocean Domain (60°S–78°S) · 25 km Antarctic Polar Stereographic · EPSG:3031</span>
         </footer>
     </div>
 
-    <script src="/static/app.js"></script>
+    <!-- PROVENANCE MODAL -->
+    <div id="provenance-modal" style="display: none; position: fixed; inset: 0; background: rgba(5, 10, 24, 0.85); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: #0d1730; border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 12px; width: 90%; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,0.6);">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid rgba(0, 212, 255, 0.15);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">🛡</span>
+                    <div>
+                        <h2 style="font-size: 16px; font-weight: 700; color: #e8f0f8; margin: 0;">Verified Data Layer Provenance & Cryptographic Integrity</h2>
+                        <div style="font-size: 12px; color: #8ba3c4;">Traceable observed data · No synthetic placeholders · SHA-256 Verified</div>
+                    </div>
+                </div>
+                <button onclick="closeProvenanceModal()" style="background: none; border: none; color: #8ba3c4; font-size: 22px; cursor: pointer; padding: 4px 8px;">✕</button>
+            </div>
+            <div id="provenance-modal-body" style="padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px;">
+                <div style="color: #8ba3c4; font-size: 13px;">Loading cryptographic provenance sidecars...</div>
+            </div>
+            <div style="padding: 14px 24px; border-top: 1px solid rgba(0, 212, 255, 0.15); display: flex; justify-content: flex-end;">
+                <button onclick="closeProvenanceModal()" class="btn btn-primary" style="padding: 6px 18px; font-size: 12px;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SKILL & VALIDATION MODAL -->
+    <div id="skill-modal" style="display: none; position: fixed; inset: 0; background: rgba(5, 10, 24, 0.85); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: #0d1730; border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 12px; width: 92%; max-width: 1050px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,0.7);">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid rgba(0, 212, 255, 0.15);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">📊</span>
+                    <div>
+                        <h2 style="font-size: 16px; font-weight: 700; color: #e8f0f8; margin: 0;">Validated Rolling-Origin Forecast Skill Harness</h2>
+                        <div style="font-size: 12px; color: #8ba3c4;">Evaluated on Held-Out 2024 Southern Ocean Record · Goessling et al. (2016) IIEE Decomposition</div>
+                    </div>
+                </div>
+                <button onclick="closeSkillModal()" style="background: none; border: none; color: #8ba3c4; font-size: 22px; cursor: pointer; padding: 4px 8px;">✕</button>
+            </div>
+            <div id="skill-modal-body" style="padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;">
+                <!-- Content injected dynamically by loadSkillModal -->
+                <div style="color: #8ba3c4; font-size: 13px;">Loading validation harness metrics...</div>
+            </div>
+            <div style="padding: 14px 24px; border-top: 1px solid rgba(0, 212, 255, 0.15); display: flex; justify-content: flex-end;">
+                <button onclick="closeSkillModal()" class="btn btn-primary" style="padding: 6px 18px; font-size: 12px;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=5"></script>
 </body>
 </html>

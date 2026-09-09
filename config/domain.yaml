@@ -4,22 +4,20 @@
 # =============================================================================
 
 region:
-  name: "Indian Ocean Sector, Southern Ocean"
-  lon_min: -20.0    # degrees East
-  lon_max: 120.0
+  name: "Southern Ocean Domain (60°S–78°S, Full Longitude)"
+  lon_min: -180.0   # degrees East (-180 to 180 or 0 to 360)
+  lon_max: 180.0
   lat_min: -78.0    # degrees North (negative = South)
-  lat_max: -50.0
+  lat_max: -60.0
 
 projection:
-  name: "NSIDC South Polar Stereographic"
-  epsg: 3412
-  # CDR products use EPSG:3976 internally; we match the native 25 km grid
-  resolution_km: 25
-  # Grid is an exact index slice of the native NSIDC-0051 332x316 southern
-  # hemisphere grid (rows 0-263, cols 96-315) — the smallest axis-aligned
-  # box in real EPSG:3412 space that fully contains lon -20..120, lat
-  # -50..-78. Never resampled: real SIC pixels are used as-is.
-  grid_shape: [264, 220]
+  name: "Antarctic Polar Stereographic"
+  epsg: 3031
+  central_meridian: 0.0
+  standard_parallel: -71.0
+  resolution_m: 25000.0  # 25 km grid spacing
+  extent_m: [-3350000.0, 3350000.0, -3350000.0, 3350000.0]  # [x_min, x_max, y_min, y_max]
+  grid_shape: [269, 269]
 
 time:
   step: "daily"
@@ -42,24 +40,139 @@ season:
   demo_months: [11, 12, 1, 2, 3]  # Nov–Mar austral summer
 
 stations:
+  # Indian Antarctic Research Stations
   bharati:
     name: "Bharati Station"
+    operator: "India (NCPOR)"
     location: "Larsemann Hills, Prydz Bay"
     lat: -69.40
     lon: 76.20
   maitri:
     name: "Maitri Station"
+    operator: "India (NCPOR)"
     location: "Princess Astrid Coast / India Bay"
     lat: -70.00
     lon: 11.50
 
+  # Ross Sea & McMurdo Sound
+  mcmurdo:
+    name: "McMurdo Station"
+    operator: "USA (USAP/NSF)"
+    location: "Ross Island, McMurdo Sound"
+    lat: -77.85
+    lon: 166.67
+  zucchelli:
+    name: "Mario Zucchelli Station"
+    operator: "Italy (PNRA)"
+    location: "Terra Nova Bay, Ross Sea"
+    lat: -74.69
+    lon: 164.12
+
+  # East Antarctica & Prydz Bay / Wilkes Land
+  davis:
+    name: "Davis Station"
+    operator: "Australia (AAD)"
+    location: "Princess Elizabeth Land, Prydz Bay"
+    lat: -68.58
+    lon: 77.97
+  casey:
+    name: "Casey Station"
+    operator: "Australia (AAD)"
+    location: "Vincennes Bay, Wilkes Land"
+    lat: -66.28
+    lon: 110.53
+  mawson:
+    name: "Mawson Station"
+    operator: "Australia (AAD)"
+    location: "Holme Bay, Mac. Robertson Land"
+    lat: -67.60
+    lon: 62.87
+  mirny:
+    name: "Mirny Station"
+    operator: "Russia (AARI)"
+    location: "Davis Sea, Queen Mary Land"
+    lat: -66.55
+    lon: 93.02
+  zhongshan:
+    name: "Zhongshan Station"
+    operator: "China (PRIC)"
+    location: "Larsemann Hills, Prydz Bay"
+    lat: -69.37
+    lon: 76.38
+
+  # Dronning Maud Land & Atlantic Sector
+  neumayer:
+    name: "Neumayer Station III"
+    operator: "Germany (AWI)"
+    location: "Ekström Ice Shelf, Atka Bay"
+    lat: -70.67
+    lon: -8.27
+  troll:
+    name: "Troll Station"
+    operator: "Norway (NPI)"
+    location: "Princess Martha Coast, Queen Maud Land"
+    lat: -72.01
+    lon: 2.53
+  syowa:
+    name: "Syowa Station"
+    operator: "Japan (NIPR)"
+    location: "East Ongul Island, Lützow-Holm Bay"
+    lat: -69.00
+    lon: 39.58
+
+  # Antarctic Peninsula & Weddell Sea
+  rothera:
+    name: "Rothera Research Station"
+    operator: "UK (BAS)"
+    location: "Adelaide Island, Antarctic Peninsula"
+    lat: -67.57
+    lon: -68.13
+  palmer:
+    name: "Palmer Station"
+    operator: "USA (USAP/NSF)"
+    location: "Anvers Island, Antarctic Peninsula"
+    lat: -64.77
+    lon: -64.05
+  halley:
+    name: "Halley VI Station"
+    operator: "UK (BAS)"
+    location: "Brunt Ice Shelf, Weddell Sea"
+    lat: -75.58
+    lon: -26.20
+  esperanza:
+    name: "Esperanza Base"
+    operator: "Argentina (IAA)"
+    location: "Hope Bay, Trinity Peninsula"
+    lat: -63.40
+    lon: -56.98
+
 origins:
   cape_town:
-    name: "Cape Town"
+    name: "Cape Town, South Africa"
     lat: -33.92
     lon: 18.42
+  hobart:
+    name: "Hobart, Australia"
+    lat: -42.88
+    lon: 147.33
+  christchurch:
+    name: "Christchurch / Lyttelton, New Zealand"
+    lat: -43.60
+    lon: 172.72
+  ushuaia:
+    name: "Ushuaia, Argentina"
+    lat: -54.80
+    lon: -68.30
+  punta_arenas:
+    name: "Punta Arenas, Chile"
+    lat: -53.16
+    lon: -70.91
+  fremantle:
+    name: "Fremantle / Perth, Australia"
+    lat: -32.05
+    lon: 115.74
   mid_ocean_waypoint:
-    name: "Mid-ocean waypoint (55°S)"
+    name: "Mid-Ocean Waypoint (55°S 76°E)"
     lat: -55.00
     lon: 76.00
 

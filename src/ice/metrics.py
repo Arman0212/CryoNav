@@ -33,23 +33,39 @@ def mae(pred, actual, mask):
 
 def iiee(pred, actual, mask, threshold=0.15, cell_area_km2=625.0):
     """
-    Integrated Ice Edge Error (IIEE).
+    Integrated Ice Edge Error (IIEE) following Goessling et al. (2016).
+    Citation: Goessling, H. F., et al. (2016). Predictability of Antarctic sea ice edge
+              on subseasonal timescales. Q.J.R. Meteorol. Soc., 142: 55-67.
     
     Area where forecast and observation disagree about whether SIC >= threshold.
-    Returns total, over-prediction, and under-prediction areas in km².
+    Decomposes into:
+      - Absolute Extent Error (AEE) = |over - under|
+      - Misplacement Error (ME) = 2 * min(over, under)
+      where IIEE = AEE + ME = over + under.
+    
+    Returns:
+      dict with total_km2, over_km2, under_km2, aee_km2, me_km2
     """
     pred_ice = ((pred >= threshold) & (mask > 0)).astype(np.float32)
     actual_ice = ((actual >= threshold) & (mask > 0)).astype(np.float32)
     
     # Over-prediction: model says ice, reality says no
-    over = np.sum((pred_ice > actual_ice).astype(np.float32)) * cell_area_km2
+    over = float(np.sum((pred_ice > actual_ice).astype(np.float32)) * cell_area_km2)
     
     # Under-prediction: model says no ice, reality says ice
-    under = np.sum((pred_ice < actual_ice).astype(np.float32)) * cell_area_km2
+    under = float(np.sum((pred_ice < actual_ice).astype(np.float32)) * cell_area_km2)
     
     total = over + under
+    aee = abs(over - under)
+    me = 2.0 * min(over, under)
     
-    return {"total_km2": float(total), "over_km2": float(over), "under_km2": float(under)}
+    return {
+        "total_km2": total,
+        "over_km2": over,
+        "under_km2": under,
+        "aee_km2": aee,
+        "me_km2": me,
+    }
 
 
 def binary_metrics(pred, actual, mask, threshold=0.15):

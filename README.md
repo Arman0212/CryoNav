@@ -54,15 +54,21 @@ Writes to `data/processed/antarctic_cube.zarr` — the exact path the API reads.
 It refuses to overwrite a cube that already exists; pass `--force` to replace
 one, or `--output PATH` to write elsewhere.
 
-#### Frontend development (no dataset needed)
+#### Frontend development & AI Agents (no dataset or Python needed)
 
 The web UI can be built entirely against frozen API responses in
 [`web/fixtures/`](web/fixtures/) — no data cube, no trained model, no backend
-process. See [`web/fixtures/README.md`](web/fixtures/README.md). Regenerate
-them after any change to a response shape:
+process. See the comprehensive [Frontend Integration Guide](FRONTEND_INTEGRATION_GUIDE.md)
+for full endpoint contracts, JSON schemas, and coordinates.
 
+Regenerate fixtures after any change to a response shape:
 ```bash
 PYTHONPATH=. python scripts/dump_fixtures.py
+```
+
+Run the backend test suite (FastAPI contracts, routing, physics):
+```bash
+PYTHONPATH=. python scripts/run_tests.py
 ```
 
 #### Team Manual: Accessing the Dataset
@@ -91,9 +97,9 @@ PYTHONPATH=. python src/ice/train.py
 # Run Complete Demo Pipeline
 PYTHONPATH=. python scripts/run_demo.py --all
 
-# Launch Interactive Polar Navigation Web App
-PYTHONPATH=. python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000
-# Open http://localhost:8000
+# Launch Interactive Polar Navigation Web App (Full Stack)
+python main.py
+# Automatically starts backend, serves frontend, and opens http://localhost:8000
 ```
 
 ---
