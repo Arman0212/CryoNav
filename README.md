@@ -21,7 +21,11 @@ All three components are unified behind a single polar map interface with intera
 - **Maitri Station** (Princess Astrid Coast, 70.0°S 11.5°E)
 
 ### Domain
-Indian Ocean sector of the Southern Ocean: 20°W–120°E, 50°S–78°S. NSIDC 25 km Polar Stereographic grid (EPSG:3412).
+Southern Ocean, full longitude, 60°S–78°S. The model grid is an exact index slice of the
+native NSIDC-0051 332×316 25 km grid (EPSG:3412) — rows 0–263, cols 96–315, giving
+**264×220**. Real SIC pixels are used as-is and never resampled. The slice is pinned in
+`config/domain.yaml`; because a rectangular crop in projected space has corners outside
+the nominal lat/lon window, the grid spans −89.8°..−39.4° lat and the full longitude range.
 
 ---
 
@@ -76,9 +80,9 @@ Generates a ~315 MB synthetic cube (~60 s) so the app runs with no download. It 
 **explicitly opt-in** — plain `python main.py` never generates or displays synthetic
 fields. Synthetic fields are *generated*, not observed, and the UI says so continuously.
 
-Note the synthetic cube is built on the canonical 269×269 grid while the real cube is
-264×220, so real cached forecasts are rejected against it (with a printed reason) and
-`/forecast` falls back to observed.
+The synthetic cube is built on the same canonical 264×220 grid as the real one, with
+identical coordinates, so it is a true drop-in: the trained model, the cached forecasts
+and the frozen fixtures all work against it unchanged.
 
 ### 3. Full Dataset Setup (1-Command Download)
 The pre-compiled, 8-year analysis-ready Zarr data cube (`2017–2024`, 2,922 days across NASA SIC, ERA5, CMEMS, and BYU Icebergs) is hosted on Google Drive (**5.4 GB compressed**) for 1-command setup:

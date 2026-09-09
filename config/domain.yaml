@@ -11,13 +11,25 @@ region:
   lat_max: -60.0
 
 projection:
-  name: "Antarctic Polar Stereographic"
-  epsg: 3031
-  central_meridian: 0.0
-  standard_parallel: -71.0
+  name: "NSIDC South Polar Stereographic"
+  epsg: 3412
   resolution_m: 25000.0  # 25 km grid spacing
-  extent_m: [-3350000.0, 3350000.0, -3350000.0, 3350000.0]  # [x_min, x_max, y_min, y_max]
-  grid_shape: [269, 269]
+  # The model grid is an EXACT index slice of the native NSIDC-0051 332x316
+  # southern-hemisphere 25 km grid: rows 0-263, cols 96-315. Same origin, same
+  # spacing, no offset — real SIC pixels are used as-is, never resampled.
+  #
+  # The slice is PINNED here rather than recomputed from `region`, because it
+  # is baked into the trained model, the cached forecasts in
+  # data/processed/demo_cache/ and the frozen fixtures in web/fixtures/.
+  # Deriving it from `region` silently changes the shape when the region is
+  # retargeted, which is how this drifted to a 269x269 grid that matched
+  # nothing the project had actually produced.
+  native_grid_shape: [332, 316]
+  native_row_slice: [0, 264]    # 264 rows
+  native_col_slice: [96, 316]   # 220 cols
+  grid_shape: [264, 220]
+  # Corners of the slice in native EPSG:3412 metres [x_min, x_max, y_min, y_max]
+  extent_m: [-1537500.0, 3937500.0, -2237500.0, 4337500.0]
 
 time:
   step: "daily"

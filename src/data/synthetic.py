@@ -18,50 +18,25 @@ from pathlib import Path
 import sys, os
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import DOMAIN, get_project_root
+from src.data.domain import CANONICAL_DOMAIN
 
 
-def make_polar_stereo_grid(ny: int = 200, nx: int = 180):
+def make_polar_stereo_grid():
     """
-    Create a subset of the NSIDC South Polar Stereographic 25 km grid
-    covering the Indian Ocean sector (20°W–120°E, 50°S–78°S).
-    
-    Returns x, y in metres (EPSG:3412), plus 2D lat/lon arrays.
+    Return the canonical model grid: x, y in EPSG:3412 metres plus true 2-D
+    lat/lon, identical to what the real cube is built on.
+
+    This used to synthesise its own grid — a linspace over lat -78..-50 and
+    lon -20..120 on an arbitrary origin — which produced coordinates that did
+    not correspond to the real grid at all. A synthetic cube was therefore not
+    a stand-in for the real one: fields, the trained model, the cached
+    forecasts and the frozen fixtures were all mutually unusable. It now
+    delegates to CANONICAL_DOMAIN, so a synthetic cube is dimensionally and
+    geographically interchangeable with the real one.
     """
-    # NSIDC EPSG:3412 grid parameters
-    # True latitude: 70°S, central meridian: 0°
-    # Grid cell size: 25 km = 25000 m
-    cell_size = 25000.0  # metres
-    
-    # The Indian Ocean sector spans roughly:
-    # x: from about -500 km to 4000 km  (lon -20 to 120)
-    # y: from about -2800 km to  500 km  (lat -78 to -50)
-    x_start = -500_000.0
-    y_start = -2_800_000.0
-    
-    x = np.arange(nx) * cell_size + x_start
-    y = np.arange(ny) * cell_size + y_start
-    
-    xx, yy = np.meshgrid(x, y)
-    
-    # Convert polar stereo to lat/lon (approximate for synthetic data)
-    # True formulas for NSIDC polar stereo south
-    rho = np.sqrt(xx**2 + yy**2)
-    c = 2 * np.arctan2(rho, 2 * 6378137.0 * 1.003)  # scale factor approx
-    
-    lat = -(np.degrees(np.arcsin(np.cos(c))) )
-    # Clamp to realistic range
-    lat = np.clip(lat, -85, -45)
-    
-    lon = np.degrees(np.arctan2(xx, -yy))
-    
-    # Actually, let's just create a clean lat/lon grid that maps to our domain
-    # This is synthetic data — correctness of the projection transform matters
-    # for real data; here we need correct value ranges and spatial patterns
-    lat_1d = np.linspace(-78, -50, ny)
-    lon_1d = np.linspace(-20, 120, nx)
-    lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
-    
-    return x, y, lat_2d, lon_2d
+    lat, lon = CANONICAL_DOMAIN.get_latlon_grids()
+    return (CANONICAL_DOMAIN.x_coords, CANONICAL_DOMAIN.y_coords,
+            lat.astype(np.float32), lon.astype(np.float32))
 
 
 def compute_land_mask(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
@@ -350,9 +325,11 @@ def build_synthetic_cube(output_path: str = None,
     print("Building synthetic Antarctic data cube...")
     rng = np.random.default_rng(seed)
     
-    # Grid
-    ny, nx = DOMAIN["projection"]["grid_shape"]
-    x, y, lat, lon = make_polar_stereo_grid(ny, nx)
+    # Grid — the canonical NSIDC slice, same as the real cube
+    x, y, lat, lon = make_polar_stereo_grid()
+    ny, nx = lat.shape
+    expected = tuple(DOMAIN["projection"]["grid_shape"])
+    assert (ny, nx) == expected, f"grid {(ny, nx)} != config {expected}"
     
     # Static fields
     land_mask = compute_land_mask(lat, lon)

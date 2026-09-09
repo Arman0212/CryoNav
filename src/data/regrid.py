@@ -34,21 +34,18 @@ def native_xy():
 
 def domain_slice():
     """
-    Row/col slices into the native grid that bound the configured lon/lat
-    region — the smallest axis-aligned box (in real projected space) that
-    contains it.
+    Row/col slices into the native NSIDC grid that define the model grid.
+
+    Read from config/domain.yaml, which pins them explicitly. They used to be
+    recomputed from `region` as the smallest axis-aligned box containing it,
+    but that made the grid shape a function of the configured lon/lat window:
+    retargeting the region silently reshaped the grid, desynchronising it from
+    the trained model, the cached forecasts and the frozen fixtures.
     """
-    region = DOMAIN["region"]
-    x, y = native_xy()
-    xx, yy = np.meshgrid(x, y)
-    lon, lat = _EPSG3412_TO_4326.transform(xx, yy)
-    mask = (
-        (lon >= region["lon_min"]) & (lon <= region["lon_max"])
-        & (lat >= region["lat_min"]) & (lat <= region["lat_max"])
-    )
-    rows = np.where(mask.any(axis=1))[0]
-    cols = np.where(mask.any(axis=0))[0]
-    return slice(int(rows.min()), int(rows.max()) + 1), slice(int(cols.min()), int(cols.max()) + 1)
+    proj = DOMAIN["projection"]
+    r0, r1 = proj["native_row_slice"]
+    c0, c1 = proj["native_col_slice"]
+    return slice(int(r0), int(r1)), slice(int(c0), int(c1))
 
 
 def target_grid():
