@@ -201,10 +201,6 @@
    Light-theme panel matching the app's own surfaces, not the dark
    chrome the bundled web/ client uses. */
 .map-legend {
-  position: absolute;
-  right: var(--space-4);
-  bottom: var(--space-4);
-  z-index: 1000;
   width: 210px;
   background: rgba(255, 255, 255, 0.93);
   border: 1px solid var(--color-border-primary);
@@ -289,4 +285,115 @@
 @media (max-width: 900px) {
   .map-legend { display: none; }
   .map-chips { display: none; }
+}
+
+/* ── Right-hand rail ───────────────────────────────────────────
+   Route summary and legend share one column so they stack instead of
+   being pinned to the same corner and overlapping. Scrolls internally
+   if the viewport is short. */
+
+.map-rail-panel {
+  padding: var(--space-3);
+  background: rgba(255, 255, 255, 0.93);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-lg);
+}
+.map-rail-panel h3 {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-family-mono); font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+/* Keep the legend's own scroll area modest so the rail never overflows */
+.map-legend .lg-body { max-height: 34vh; }
+
+@media (max-width: 1100px) {
+  .map-rail-right { width: 180px; }
+  .map-legend { width: 180px; }
+}
+@media (max-width: 900px) {
+  .map-rail-right { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Three-column workspace — controls | map | results.
+
+   Mirrors the bundled web/ client's 360px | 1fr | 380px grid. Panels
+   are real columns rather than overlays floating on the map, which is
+   why nothing here can collide: the legend, projection picker and route
+   summary each own their own space instead of fighting for a corner.
+   ═══════════════════════════════════════════════════════════════ */
+.map-workspace {
+  display: grid;
+  grid-template-columns: 300px 1fr 300px;
+  height: calc(100vh - var(--topbar-height) - var(--statusbar-height));
+  /* Cancel the page container's padding so the map reaches the edges */
+  margin: calc(var(--space-5) * -1);
+  background: var(--color-bg-primary);
+}
+
+.map-panel {
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-bg-secondary);
+}
+.map-panel-left { border-right: 1px solid var(--color-border-primary); }
+.map-panel-right {
+  border-left: 1px solid var(--color-border-primary);
+  justify-content: flex-start;
+}
+.map-panel::-webkit-scrollbar { width: 4px; }
+.map-panel::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 4px; }
+
+.map-canvas-wrap { position: relative; overflow: hidden; }
+.map-canvas-wrap .leaflet-container { width: 100%; height: 100%; }
+
+/* Panel sections: plain blocks now, not floating glass cards */
+.map-panel-section,
+.map-panel .map-controls,
+.map-panel .map-legend,
+.map-panel .map-rail-panel {
+  position: static;
+  width: auto;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.map-panel .map-legend .lg-body { max-height: none; }
+.map-panel-section h3,
+.map-panel .map-rail-panel h3 {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-family-mono); font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+.map-panel-section select { margin-bottom: var(--space-2); }
+
+/* Narrow screens: panels fold under the map instead of overlapping it */
+@media (max-width: 1200px) {
+  .map-workspace { grid-template-columns: 260px 1fr; }
+  .map-panel-right { display: none; }
+}
+@media (max-width: 860px) {
+  .map-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: 55vh auto;
+    height: auto;
+    margin: calc(var(--space-3) * -1);
+  }
+  .map-panel-left { border-right: none; border-top: 1px solid var(--color-border-primary); }
+  .map-canvas-wrap { grid-row: 1; }
 }

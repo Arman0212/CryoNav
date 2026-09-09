@@ -34,7 +34,7 @@ training:
   epochs: 50
   early_stopping_patience: 10
   gradient_clip: 1.0
-  device: "mps"   # Apple Silicon; override to "cuda" or "cpu" as needed
+  device: "cpu"   # this machine has CPU-only torch (no CUDA/MPS)
 
 loss:
   l1_weight: 1.0

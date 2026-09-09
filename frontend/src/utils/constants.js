@@ -27,9 +27,13 @@ export const WS_URL = import.meta.env.VITE_WS_URL || `ws://${window.location.hos
 export const MAP_DEFAULTS = {
   center: [-65, 50],
   zoom: 3,
-  minZoom: 2,
+  /* minZoom 1 so the whole domain fits on screen; the old floor of 2 meant
+     you could never pull back far enough to see it end to end. */
+  minZoom: 1,
   maxZoom: 8,
-  maxBounds: [[-90, -180], [-40, 180]],
+  /* Generous enough to reach any part of the Southern Ocean, tight enough
+     that the world still cannot repeat sideways. */
+  maxBounds: [[-89.9, -200], [-15, 200]],
   basemap: 'esri_imagery',
 };
 

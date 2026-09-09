@@ -174,127 +174,11 @@ export default function MapPage() {
   }, [routeResult]);
 
   return (
-    <div className="map-page" style={{ height: 'calc(100vh - var(--topbar-height) - var(--statusbar-height))', position: 'relative' }}>
-      <MapContainer
-        key={projection}
-        /* Must name EPSG3857 explicitly: Leaflet's setOptions copies an
-           explicit `undefined` over its own default, leaving the map with
-           no CRS at all and throwing inside project(). */
-        crs={isPolar ? EPSG3031 : L.CRS.EPSG3857}
-        center={view.center}
-        zoom={view.zoom}
-        minZoom={view.minZoom}
-        zoomSnap={view.zoomSnap}
-        maxZoom={isPolar ? GIBS_MAX_ZOOM['250m'] : (basemap.maxZoom ?? MAP_DEFAULTS.maxZoom)}
-        /* Stop the world repeating sideways forever. Leaflet tiles wrap by
-           default, which in Mercator gave endless copies of Antarctica and
-           made pan feel bottomless. maxBounds pins the view to the southern
-           ocean; the viscosity makes the edge push back rather than snap. */
-        maxBounds={isPolar ? undefined : MAP_DEFAULTS.maxBounds}
-        maxBoundsViscosity={isPolar ? 0 : 1.0}
-        worldCopyJump={false}
-        style={{ width: '100%', height: '100%', background: 'var(--color-bg-primary)' }}
-      >
-        {isPolar ? (
-          <>
-            <GibsLayer key={polarBasemapId} spec={polarBasemap} date={selectedDate} />
-            {polarOverlays.seaIce && (
-              <GibsLayer spec={POLAR_OVERLAYS.seaIce} date={selectedDate} opacity={POLAR_OVERLAYS.seaIce.opacity} />
-            )}
-            {polarOverlays.coastlines && (
-              <GibsLayer spec={POLAR_OVERLAYS.coastlines} date={selectedDate} opacity={POLAR_OVERLAYS.coastlines.opacity} />
-            )}
-            {polarOverlays.graticule && (
-              <GibsLayer spec={POLAR_OVERLAYS.graticule} date={selectedDate} opacity={POLAR_OVERLAYS.graticule.opacity} />
-            )}
-          </>
-        ) : (
-          <TileLayer
-            key={basemapId}
-            url={basemap.url}
-            attribution={basemap.attribution}
-            maxZoom={basemap.maxZoom ?? MAP_DEFAULTS.maxZoom}
-            opacity={basemap.opacity ?? 1}
-            noWrap                /* one Earth, not an infinite strip of them */
-            bounds={MAP_DEFAULTS.maxBounds}
-          />
-        )}
-
-        <CoordinateChips projection={projection} gridShape={grid?.shape} />
-
-        {/* Reference geometry: the Antarctic Circle, and the box the model
-            actually covers so it's obvious where the data stops. */}
-        <Circle
-          center={[-90, 0]}
-          radius={ANTARCTIC_CIRCLE_RADIUS_M}
-          pathOptions={{
-            color: 'rgba(11, 127, 168, 0.30)', weight: 1, dashArray: '8 4',
-            fillColor: 'rgba(11, 127, 168, 0.04)', fillOpacity: 1,
-          }}
-          interactive={false}
-        />
-        <Polyline
-          positions={DOMAIN_BOUNDS}
-          pathOptions={{ color: 'rgba(11, 127, 168, 0.45)', weight: 1, dashArray: '4 4' }}
-          interactive={false}
-        >
-          <Tooltip sticky>CryoNav domain · 20°W–120°E, 50°S–78°S</Tooltip>
-        </Polyline>
-
-        {/* Bathymetry sits under everything else — it's context, not data
-            you read values off. */}
-        {layers.bathymetry && grid?.bathy && <BathymetryLayer grid={grid} />}
-
-        {/* Model SIC field: observed, forecast, or the difference between
-            them. Difference is the honest view — it shows where the model
-            is wrong rather than only what it predicted. */}
-        {sicOn && grid && sicMode === 'difference' && diffField && (
-          <SicCanvasLayer sic={diffField} grid={grid} colorFn={diffColor} />
-        )}
-        {sicOn && grid && sicMode === 'forecast' && forecast.data?.sic && (
-          <SicCanvasLayer sic={forecast.data.sic} grid={grid} colorFn={sicColor} />
-        )}
-        {sicOn && grid && sicMode === 'observed' && observed.data?.sic && (
-          <SicCanvasLayer sic={observed.data.sic} grid={grid} colorFn={sicColor} />
-        )}
-
-        {/* Stations and ports, with their names permanently on the map. */}
-        {layers.stations && (
-          <PlaceMarkers
-            stations={RESEARCH_STATIONS}
-            ports={DEPARTURE_PORTS}
-            config={config}
-            onOrigin={(p) => setOrigin({ id: p.id, name: p.name, lat: p.lat, lon: p.lon })}
-            onDestination={(p) => setDestination({ id: p.id, name: p.name, lat: p.lat, lon: p.lon })}
-          />
-        )}
-
-        {/* Modelled bergs: day-0 positions, and — when trajectories are on —
-            drift tracks, projected endpoints and the ensemble envelope. */}
-        {layers.icebergs && bergs?.length > 0 && (
-          <IcebergLayer bergs={bergs} horizon={bergHorizon} showTracks={Boolean(layers.trajectories)} />
-        )}
-
-        {/* Real CMEMS surface currents and ERA5 wind, as vector fields. */}
-        {layers.oceanCurrents && ocean.data?.vectors && (
-          <VectorFieldLayer vectors={ocean.data.vectors} color="#6d28d9" scale={26} />
-        )}
-        {layers.weather && weather.data?.vectors && (
-          <VectorFieldLayer vectors={weather.data.vectors} color="#b45309" scale={20} />
-        )}
-
-        {/* Observed NIC positions, deliberately distinct from the modelled ones. */}
-        {showLiveBergs && liveBergs.data && <LiveIcebergLayer data={liveBergs.data} />}
-
-        {layers.routes && routePaths.map(({ key, name, path, color }) => (
-          <Polyline key={key} positions={path} pathOptions={{ color, weight: 3 }}>
-            <Tooltip sticky>{name}</Tooltip>
-          </Polyline>
-        ))}
-      </MapContainer>
-
-      {/* Map Layer Control — glassmorphic overlay */}
-      <div className="map-layer-control">
+    <div className="map-workspace">
+      {/* Controls — fixed column, like the bundled client's left panel.
+          Nothing here floats over the map, so nothing can collide. */}
+      <aside className="map-panel map-panel-left">
+      <div className="map-panel-section">
         <h3><Globe size={12} /> Projection</h3>
         <select
           value={projection}
@@ -386,9 +270,7 @@ export default function MapPage() {
         )}
       </div>
 
-      <MapLegend />
 
-      {/* Lead-day / berg-horizon scrubbing */}
       <MapControls
         leadDay={leadDay} setLeadDay={setLeadDay}
         bergHorizon={bergHorizon} setBergHorizon={setBergHorizon}
@@ -398,9 +280,131 @@ export default function MapPage() {
         forecastSource={forecast.data?.source}
       />
 
-      {/* Route summary panel, only when a route has been computed */}
-      {routePaths.length > 0 && (
-        <div className="map-layer-control" style={{ top: 'auto', bottom: 'var(--space-4)', right: 'var(--space-4)', left: 'auto' }}>
+      </aside>
+
+      <div className="map-canvas-wrap">
+      <MapContainer
+        key={projection}
+        /* Must name EPSG3857 explicitly: Leaflet's setOptions copies an
+           explicit `undefined` over its own default, leaving the map with
+           no CRS at all and throwing inside project(). */
+        crs={isPolar ? EPSG3031 : L.CRS.EPSG3857}
+        center={view.center}
+        zoom={view.zoom}
+        minZoom={view.minZoom}
+        zoomSnap={view.zoomSnap}
+        maxZoom={isPolar ? GIBS_MAX_ZOOM['250m'] : (basemap.maxZoom ?? MAP_DEFAULTS.maxZoom)}
+        /* Stop the world repeating sideways forever. Leaflet tiles wrap by
+           default, which in Mercator gave endless copies of Antarctica and
+           made pan feel bottomless. maxBounds pins the view to the southern
+           ocean; the viscosity makes the edge push back rather than snap. */
+        maxBounds={isPolar ? undefined : MAP_DEFAULTS.maxBounds}
+        maxBoundsViscosity={isPolar ? 0 : 0.25}
+        worldCopyJump={false}
+        style={{ width: '100%', height: '100%', background: 'var(--color-bg-primary)' }}
+      >
+        {isPolar ? (
+          <>
+            <GibsLayer key={polarBasemapId} spec={polarBasemap} date={selectedDate} />
+            {polarOverlays.seaIce && (
+              <GibsLayer spec={POLAR_OVERLAYS.seaIce} date={selectedDate} opacity={POLAR_OVERLAYS.seaIce.opacity} />
+            )}
+            {polarOverlays.coastlines && (
+              <GibsLayer spec={POLAR_OVERLAYS.coastlines} date={selectedDate} opacity={POLAR_OVERLAYS.coastlines.opacity} />
+            )}
+            {polarOverlays.graticule && (
+              <GibsLayer spec={POLAR_OVERLAYS.graticule} date={selectedDate} opacity={POLAR_OVERLAYS.graticule.opacity} />
+            )}
+          </>
+        ) : (
+          <TileLayer
+            key={basemapId}
+            url={basemap.url}
+            attribution={basemap.attribution}
+            maxZoom={basemap.maxZoom ?? MAP_DEFAULTS.maxZoom}
+            opacity={basemap.opacity ?? 1}
+            noWrap   /* one Earth, not an infinite strip of them */
+          />
+        )}
+
+        <CoordinateChips projection={projection} gridShape={grid?.shape} />
+
+        {/* Reference geometry: the Antarctic Circle, and the box the model
+            actually covers so it's obvious where the data stops. */}
+        <Circle
+          center={[-90, 0]}
+          radius={ANTARCTIC_CIRCLE_RADIUS_M}
+          pathOptions={{
+            color: 'rgba(11, 127, 168, 0.30)', weight: 1, dashArray: '8 4',
+            fillColor: 'rgba(11, 127, 168, 0.04)', fillOpacity: 1,
+          }}
+          interactive={false}
+        />
+        <Polyline
+          positions={DOMAIN_BOUNDS}
+          pathOptions={{ color: 'rgba(11, 127, 168, 0.45)', weight: 1, dashArray: '4 4' }}
+          interactive={false}
+        >
+          <Tooltip sticky>CryoNav domain · 20°W–120°E, 50°S–78°S</Tooltip>
+        </Polyline>
+
+        {/* Bathymetry sits under everything else — it's context, not data
+            you read values off. */}
+        {layers.bathymetry && grid?.bathy && <BathymetryLayer grid={grid} />}
+
+        {/* Model SIC field: observed, forecast, or the difference between
+            them. Difference is the honest view — it shows where the model
+            is wrong rather than only what it predicted. */}
+        {sicOn && grid && sicMode === 'difference' && diffField && (
+          <SicCanvasLayer sic={diffField} grid={grid} colorFn={diffColor} />
+        )}
+        {sicOn && grid && sicMode === 'forecast' && forecast.data?.sic && (
+          <SicCanvasLayer sic={forecast.data.sic} grid={grid} colorFn={sicColor} />
+        )}
+        {sicOn && grid && sicMode === 'observed' && observed.data?.sic && (
+          <SicCanvasLayer sic={observed.data.sic} grid={grid} colorFn={sicColor} />
+        )}
+
+        {/* Stations and ports, with their names permanently on the map. */}
+        {layers.stations && (
+          <PlaceMarkers
+            stations={RESEARCH_STATIONS}
+            ports={DEPARTURE_PORTS}
+            config={config}
+            onOrigin={(p) => setOrigin({ id: p.id, name: p.name, lat: p.lat, lon: p.lon })}
+            onDestination={(p) => setDestination({ id: p.id, name: p.name, lat: p.lat, lon: p.lon })}
+          />
+        )}
+
+        {/* Modelled bergs: day-0 positions, and — when trajectories are on —
+            drift tracks, projected endpoints and the ensemble envelope. */}
+        {layers.icebergs && bergs?.length > 0 && (
+          <IcebergLayer bergs={bergs} horizon={bergHorizon} showTracks={Boolean(layers.trajectories)} />
+        )}
+
+        {/* Real CMEMS surface currents and ERA5 wind, as vector fields. */}
+        {layers.oceanCurrents && ocean.data?.vectors && (
+          <VectorFieldLayer vectors={ocean.data.vectors} color="#6d28d9" scale={26} />
+        )}
+        {layers.weather && weather.data?.vectors && (
+          <VectorFieldLayer vectors={weather.data.vectors} color="#b45309" scale={20} />
+        )}
+
+        {/* Observed NIC positions, deliberately distinct from the modelled ones. */}
+        {showLiveBergs && liveBergs.data && <LiveIcebergLayer data={liveBergs.data} />}
+
+        {layers.routes && routePaths.map(({ key, name, path, color }) => (
+          <Polyline key={key} positions={path} pathOptions={{ color, weight: 3 }}>
+            <Tooltip sticky>{name}</Tooltip>
+          </Polyline>
+        ))}
+      </MapContainer>
+      </div>
+
+      {/* Results — route metrics and legend, in their own column. */}
+      <aside className="map-panel map-panel-right">
+        {routePaths.length > 0 && (
+        <div className="map-rail-panel">
           <h3>Routes</h3>
           {routeResult.comparison?.table?.filter((r) => r.success).map((r) => (
             <div key={r.key} style={{ fontSize: 'var(--font-size-xs)', display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', padding: '2px 0' }}>
@@ -409,7 +413,9 @@ export default function MapPage() {
             </div>
           ))}
         </div>
-      )}
+        )}
+        <MapLegend />
+      </aside>
     </div>
   );
 }
