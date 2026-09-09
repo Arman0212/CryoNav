@@ -33,6 +33,7 @@ import { useGrid } from '@hooks/useGrid';
 import { useObserved } from '@hooks/useObserved';
 import { useForecast } from '@hooks/useForecast';
 import { useLiveBergs } from '@hooks/useProvenance';
+import { useOcean, useWeather } from '@hooks/useOcean';
 import { useConfig } from '@hooks/useConfig';
 import SicCanvasLayer, { sicColor, diffColor } from '@components/map/SicCanvasLayer';
 import IcebergLayer from '@components/map/IcebergLayer';
@@ -40,6 +41,7 @@ import BathymetryLayer from '@components/map/BathymetryLayer';
 import LiveIcebergLayer from '@components/map/LiveIcebergLayer';
 import MapControls from '@components/map/MapControls';
 import PlaceMarkers from '@components/map/PlaceMarkers';
+import VectorFieldLayer from '@components/map/VectorFieldLayer';
 import '@styles/map-layers.css';
 import {
   MAP_DEFAULTS, RESEARCH_STATIONS, DEPARTURE_PORTS, MAP_LAYERS, BASEMAPS,
@@ -56,6 +58,7 @@ import { formatDistance, formatDuration } from '@utils/formatters';
 const LIVE_LAYER_IDS = new Set([
   'icebergs', 'trajectories', 'routes', 'stations',
   'seaIce', 'seaIceForecast', 'bathymetry',
+  'oceanCurrents', 'weather',
 ]);
 
 const ROUTE_COLORS = {
@@ -137,6 +140,10 @@ export default function MapPage() {
     if (!f || !o) return null;
     return f.map((row, y) => row.map((v, x) => v - (o[y]?.[x] ?? 0)));
   }, [sicMode, forecast.data, observed.data]);
+
+  /* Real CMEMS currents and ERA5 wind, fetched only when their layer is on. */
+  const ocean = useOcean(layers.oceanCurrents ? selectedDate : null, 6);
+  const weather = useWeather(layers.weather ? selectedDate : null, 6);
 
   const liveBergs = useLiveBergs();
   const { data: config } = useConfig();
@@ -262,6 +269,14 @@ export default function MapPage() {
             drift tracks, projected endpoints and the ensemble envelope. */}
         {layers.icebergs && bergs?.length > 0 && (
           <IcebergLayer bergs={bergs} horizon={bergHorizon} showTracks={Boolean(layers.trajectories)} />
+        )}
+
+        {/* Real CMEMS surface currents and ERA5 wind, as vector fields. */}
+        {layers.oceanCurrents && ocean.data?.vectors && (
+          <VectorFieldLayer vectors={ocean.data.vectors} color="#6d28d9" scale={26} />
+        )}
+        {layers.weather && weather.data?.vectors && (
+          <VectorFieldLayer vectors={weather.data.vectors} color="#b45309" scale={20} />
         )}
 
         {/* Observed NIC positions, deliberately distinct from the modelled ones. */}

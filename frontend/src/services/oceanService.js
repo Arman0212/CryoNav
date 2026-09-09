@@ -1,16 +1,32 @@
-/* Ocean Service — /ocean (NOT in the real backend yet)
-   Arman0212/CryoNav has no /ocean route (CMEMS current/SSH data is not
-   served via API — see the Dashboard's "Ocean (CMEMS) — Not Connected"
-   status row). Calls below will 404 until a backend route is added. */
+/* ═══════════════════════════════════════════════════════════════
+   Ocean Service — GET /ocean
+
+   Real CMEMS GLORYS12 reanalysis. The variables (uo, vo, sst, zos) were
+   in the data cube all along but had no route, which is why this page
+   used to read "Not Connected". The endpoint now serves them.
+
+   `stride` subsamples the current vectors for arrow rendering — a full
+   264x220 vector field is far more than a screen can show, and the raw
+   fields are still returned for raster use.
+   ═══════════════════════════════════════════════════════════════ */
+
 import apiClient from './api';
+
 const oceanService = {
-  async getOceanState(bounds, date) {
-    const { data } = await apiClient.get('/ocean', { params: { ...bounds, date } });
-    return data;
-  },
-  async getCurrents(bounds, date) {
-    const { data } = await apiClient.get('/ocean/currents', { params: { ...bounds, date } });
+  /**
+   * @param {string} date - ISO date (YYYY-MM-DD)
+   * @param {number} [stride=6] - Vector subsampling; higher = fewer arrows
+   * @returns {Promise<{
+   *   date: string, source: string, is_real: boolean,
+   *   vectors: {lat:number,lon:number,u:number,v:number,speed:number}[],
+   *   sst: number[][], speed: number[][], zos: number[][], shape: number[],
+   *   stats: {mean_current_ms:number, max_current_ms:number, mean_sst_c:number, mean_ssh_m:number}
+   * }>}
+   */
+  async getOcean(date, stride = 6) {
+    const { data } = await apiClient.get('/ocean', { params: { date, stride } });
     return data;
   },
 };
+
 export default oceanService;

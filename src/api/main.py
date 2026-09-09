@@ -312,6 +312,161 @@ async def get_observed(date: str):
         raise HTTPException(500, str(e))
 
 
+@app.get("/ocean")
+async def get_ocean(date: str, stride: int = 4):
+    """
+    CMEMS GLORYS ocean state: surface currents, temperature and sea level.
+
+    These variables have been in the cube all along (uo, vo, sst, zos) but
+    had no route, so the UI could not show them. `stride` subsamples the
+    current vectors — the frontend draws arrows, not a per-cell field, and
+    a full 264x220 vector grid is far more than any screen can render.
+
+    `is_real` reports the cube's own provenance flag for this timestep
+    rather than assuming every day is backed by real reanalysis.
+    """
+    if DS is None:
+        raise HTTPException(404, "Data not loaded")
+
+    try:
+        target_dt = np.datetime64(date)
+        idx = int(np.argmin(np.abs(DS.time.values - target_dt)))
+        actual = str(np.datetime64(DS.time.values[idx], "D"))
+
+        land = DS["land_mask"].values
+        ocean = land < 0.5
+
+        uo = DS["uo"].values[idx]
+        vo = DS["vo"].values[idx]
+        sst = DS["sst"].values[idx]
+        zos = DS["zos"].values[idx]
+
+        speed = np.sqrt(uo ** 2 + vo ** 2)
+
+        # Subsampled vector field for arrow rendering
+        lat = DS["lat"].values
+        lon = DS["lon"].values
+        s = max(1, int(stride))
+        vectors = []
+        for r in range(0, uo.shape[0], s):
+            for c in range(0, uo.shape[1], s):
+                if land[r, c] >= 0.5:
+                    continue
+                u = float(uo[r, c]); v = float(vo[r, c])
+                if not np.isfinite(u) or not np.isfinite(v):
+                    continue
+                if abs(u) < 1e-4 and abs(v) < 1e-4:
+                    continue
+                vectors.append({
+                    "lat": round(float(lat[r, c]), 4),
+                    "lon": round(float(lon[r, c]), 4),
+                    "u": round(u, 4),
+                    "v": round(v, 4),
+                    "speed": round(float(np.hypot(u, v)), 4),
+                })
+
+        def _mean(a):
+            vals = a[ocean]
+            vals = vals[np.isfinite(vals)]
+            return float(np.mean(vals)) if vals.size else None
+
+        is_real = bool(DS["ocean_is_real"].values[idx]) if "ocean_is_real" in DS else None
+
+        return {
+            "date": actual,
+            "requested": date,
+            "source": "CMEMS GLORYS12 reanalysis" if is_real else "gap-filled",
+            "is_real": is_real,
+            "stride": s,
+            "vectors": vectors,
+            "sst": np.nan_to_num(sst, nan=0.0).round(3).tolist(),
+            "speed": np.nan_to_num(speed, nan=0.0).round(4).tolist(),
+            "zos": np.nan_to_num(zos, nan=0.0).round(4).tolist(),
+            "shape": list(uo.shape),
+            "stats": {
+                "mean_current_ms": _mean(speed),
+                "max_current_ms": float(np.nanmax(speed[ocean])) if ocean.any() else None,
+                # Cube stores SST in kelvin; report celsius
+                "mean_sst_c": (lambda t: t - 273.15 if t is not None and t > 100 else t)(_mean(sst)),
+                "mean_ssh_m": _mean(zos),
+            },
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/weather")
+async def get_weather(date: str, stride: int = 4):
+    """
+    ERA5 atmospheric state: 10 m wind, 2 m temperature, mean sea-level
+    pressure. Same shape of response as /ocean so the frontend can treat
+    the two the same way.
+    """
+    if DS is None:
+        raise HTTPException(404, "Data not loaded")
+
+    try:
+        target_dt = np.datetime64(date)
+        idx = int(np.argmin(np.abs(DS.time.values - target_dt)))
+        actual = str(np.datetime64(DS.time.values[idx], "D"))
+
+        land = DS["land_mask"].values
+        ocean = land < 0.5
+        lat = DS["lat"].values
+        lon = DS["lon"].values
+
+        u10 = DS["u10"].values[idx]
+        v10 = DS["v10"].values[idx]
+        wind = DS["wind_speed"].values[idx] if "wind_speed" in DS else np.sqrt(u10 ** 2 + v10 ** 2)
+        t2m = DS["t2m"].values[idx]
+        msl = DS["msl"].values[idx]
+
+        s = max(1, int(stride))
+        vectors = []
+        for r in range(0, u10.shape[0], s):
+            for c in range(0, u10.shape[1], s):
+                if land[r, c] >= 0.5:
+                    continue
+                u = float(u10[r, c]); v = float(v10[r, c])
+                if not np.isfinite(u) or not np.isfinite(v):
+                    continue
+                vectors.append({
+                    "lat": round(float(lat[r, c]), 4),
+                    "lon": round(float(lon[r, c]), 4),
+                    "u": round(u, 3),
+                    "v": round(v, 3),
+                    "speed": round(float(np.hypot(u, v)), 3),
+                })
+
+        def _mean(a):
+            vals = a[ocean]
+            vals = vals[np.isfinite(vals)]
+            return float(np.mean(vals)) if vals.size else None
+
+        is_real = bool(DS["atmo_is_real"].values[idx]) if "atmo_is_real" in DS else None
+        t_mean = _mean(t2m)
+
+        return {
+            "date": actual,
+            "requested": date,
+            "source": "ERA5 reanalysis" if is_real else "gap-filled",
+            "is_real": is_real,
+            "stride": s,
+            "vectors": vectors,
+            "wind_speed": np.nan_to_num(wind, nan=0.0).round(3).tolist(),
+            "shape": list(u10.shape),
+            "stats": {
+                "mean_wind_ms": _mean(wind),
+                "max_wind_ms": float(np.nanmax(wind[ocean])) if ocean.any() else None,
+                # Cube stores 2 m temperature in kelvin
+                "mean_t2m_c": (t_mean - 273.15) if t_mean is not None and t_mean > 100 else t_mean,
+                "mean_msl_hpa": (lambda m: m / 100.0 if m is not None and m > 10000 else m)(_mean(msl)),
+            },
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 def _grid_tree():
     """KD-tree over grid cells for fast nearest-cell lookup during drift."""
     if "tree" not in CACHE:

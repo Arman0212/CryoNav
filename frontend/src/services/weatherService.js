@@ -1,19 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════
-   Weather Service — /weather (NOT in the real backend yet)
-   Arman0212/CryoNav's src/api/main.py has no /weather route at all
-   (ERA5 atmospheric data is referenced in config but never served via
-   API). Calls below will 404 until a backend route is added.
+   Weather Service — GET /weather
+
+   Real ERA5 reanalysis (10 m wind, 2 m temperature, mean sea-level
+   pressure) out of the data cube. Same response shape as /ocean so both
+   can be handled the same way on the client.
    ═══════════════════════════════════════════════════════════════ */
+
 import apiClient from './api';
 
 const weatherService = {
-  async getWeather(position, date) {
-    const { data } = await apiClient.get('/weather', { params: { lat: position.lat, lon: position.lon, date } });
-    return data;
-  },
-  async getWeatherForecast(position, hours = 48) {
-    const { data } = await apiClient.get('/weather/forecast', { params: { lat: position.lat, lon: position.lon, hours } });
+  /**
+   * @param {string} date - ISO date (YYYY-MM-DD)
+   * @param {number} [stride=6] - Wind-vector subsampling
+   * @returns {Promise<{
+   *   date: string, source: string, is_real: boolean,
+   *   vectors: {lat:number,lon:number,u:number,v:number,speed:number}[],
+   *   wind_speed: number[][], shape: number[],
+   *   stats: {mean_wind_ms:number, max_wind_ms:number, mean_t2m_c:number, mean_msl_hpa:number}
+   * }>}
+   */
+  async getWeather(date, stride = 6) {
+    const { data } = await apiClient.get('/weather', { params: { date, stride } });
     return data;
   },
 };
+
 export default weatherService;

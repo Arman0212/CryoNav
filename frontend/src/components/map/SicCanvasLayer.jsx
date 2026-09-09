@@ -68,7 +68,10 @@ export default function SicCanvasLayer({ sic, grid, colorFn = sicColor, opacity 
     canvasRef.current = canvas;
     map.getPanes().overlayPane.appendChild(canvas);
 
+    let frame = null;
+
     const draw = () => {
+      frame = null;
       if (!sic || !grid?.lat || !grid?.lon) return;
 
       const size = map.getSize();
@@ -84,16 +87,24 @@ export default function SicCanvasLayer({ sic, grid, colorFn = sicColor, opacity 
       const shape = grid.shape || [sic.length, sic[0]?.length ?? 0];
       const bounds = map.getBounds();
       const zoom = map.getZoom();
-      // Stride the grid when zoomed out; splat radius grows with zoom so
-      // cells keep overlapping instead of separating into dots.
-      const step = zoom >= 6 ? 1 : 2;
-      const radius = Math.max(2.5, Math.round(Math.pow(1.65, zoom - 1))) * 1.35;
+
+      /* Stride the grid when zoomed out. At z<=2 the whole 264x220 field is
+         only a few hundred pixels wide, so drawing every cell burns time on
+         sub-pixel work nobody can see. */
+      const step = zoom >= 6 ? 1 : zoom >= 4 ? 2 : 3;
+      const size0 = Math.max(2, Math.round(Math.pow(1.7, zoom - 1)) * 2.4);
 
       const south = bounds.getSouth() - 1;
       const north = bounds.getNorth() + 1;
       const west = bounds.getWest() - 2;
       const east = bounds.getEast() + 2;
 
+      /* Batch by colour: switching fillStyle is the expensive part, so
+         quantise to 24 buckets and fill each bucket's cells in one pass.
+         Squares rather than arcs — fillRect is markedly cheaper than
+         beginPath/arc/fill per cell, and at these sizes they still tile
+         into a continuous field. */
+      const buckets = new Map();
       for (let y = 0; y < shape[0]; y += step) {
         const latRow = grid.lat[y];
         const lonRow = grid.lon[y];
@@ -106,26 +117,56 @@ export default function SicCanvasLayer({ sic, grid, colorFn = sicColor, opacity 
           const val = sicRow[x];
           if (val === undefined || val === null) continue;
 
-          const color = colorFn(val);
-          if (!color) continue;
-
           const cellLat = latRow[x];
           const cellLon = lonRow[x];
           if (cellLat < south || cellLat > north || cellLon < west || cellLon > east) continue;
 
+          const q = Math.round(val * 24) / 24;
+          const color = colorFn(q);
+          if (!color) continue;
+
           const pt = map.latLngToContainerPoint([cellLat, cellLon]);
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
-          ctx.fillStyle = color;
-          ctx.fill();
+          let list = buckets.get(color);
+          if (!list) { list = []; buckets.set(color, list); }
+          list.push(pt.x, pt.y);
         }
       }
+
+      const half = size0 / 2;
+      buckets.forEach((coords, color) => {
+        ctx.fillStyle = color;
+        for (let i = 0; i < coords.length; i += 2) {
+          ctx.fillRect(coords[i] - half, coords[i + 1] - half, size0, size0);
+        }
+      });
     };
 
-    draw();
-    map.on('move zoom viewreset resize', draw);
+    const schedule = () => {
+      if (frame === null) frame = requestAnimationFrame(draw);
+    };
+
+    /* Redraw only once the map comes to rest.
+
+       Listening to 'move'/'zoom' meant a full field redraw on every frame
+       of a pan — tens of thousands of fills per frame, which is what made
+       the map feel stuck. Leaflet already translates the overlay pane
+       during a drag, so the canvas travels with the map for free and only
+       needs repainting when the view settles. */
+    const onZoomStart = () => { canvas.style.visibility = 'hidden'; };
+    const onZoomEnd = () => { canvas.style.visibility = 'visible'; schedule(); };
+
+    schedule();
+    map.on('moveend', schedule);
+    map.on('viewreset resize', schedule);
+    map.on('zoomstart', onZoomStart);
+    map.on('zoomend', onZoomEnd);
+
     return () => {
-      map.off('move zoom viewreset resize', draw);
+      map.off('moveend', schedule);
+      map.off('viewreset resize', schedule);
+      map.off('zoomstart', onZoomStart);
+      map.off('zoomend', onZoomEnd);
+      if (frame !== null) cancelAnimationFrame(frame);
       if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
       canvasRef.current = null;
     };
