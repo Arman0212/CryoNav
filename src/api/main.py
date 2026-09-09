@@ -174,14 +174,28 @@ async def get_config():
 
 @app.get("/demo-dates")
 async def get_demo_dates():
-    """Return available dates for the demo."""
+    """
+    Return available dates for the demo.
+
+    `demo_dates` lists only the held-out dates the LOADED cube actually covers.
+    A quick synthetic cube spans 2022-12-01..2023-03-31 and so covers just one
+    of the three; advertising the other two made the UI request dates the cube
+    cannot serve, which silently resolved to the nearest available day instead.
+    """
     if DS is None:
         return {"dates": DOMAIN["held_out_demo_dates"]}
-    
+
     times = [str(np.datetime64(t, 'D')) for t in DS.time.values]
+    start, end = np.datetime64(times[0]), np.datetime64(times[-1])
+
+    available, unavailable = [], []
+    for d in DOMAIN["held_out_demo_dates"]:
+        (available if start <= np.datetime64(d) <= end else unavailable).append(d)
+
     return {
         "all_dates": times,
-        "demo_dates": DOMAIN["held_out_demo_dates"],
+        "demo_dates": available,
+        "demo_dates_unavailable": unavailable,
         "range": {"start": times[0], "end": times[-1]},
     }
 
@@ -350,8 +364,22 @@ async def get_observed(date: str):
     
     try:
         target_dt = np.datetime64(date)
+    except Exception:
+        raise HTTPException(400, f"Unparseable date: {date!r}")
+
+    # Outside the cube entirely: refuse rather than snap to the nearest day,
+    # which returned a field months away under the requested date's name.
+    if not (DS.time.values[0] <= target_dt <= DS.time.values[-1]):
+        raise HTTPException(
+            400,
+            f"{date} is outside the loaded cube "
+            f"({str(np.datetime64(DS.time.values[0], 'D'))} to "
+            f"{str(np.datetime64(DS.time.values[-1], 'D'))}).",
+        )
+
+    try:
         idx = int(np.argmin(np.abs(DS.time.values - target_dt)))
-        
+
         sic = DS["sic"].values[idx]
         land_mask = DS["land_mask"].values
         
