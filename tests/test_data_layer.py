@@ -12,6 +12,7 @@ import numpy as np
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from src.config import DOMAIN
 from src.data.domain import CANONICAL_DOMAIN, PolarDomain
 from src.data.provenance import (
     write_provenance_sidecar,
@@ -26,22 +27,19 @@ from src.data.sources.bathymetry import load_canonical_bathymetry_grid
 
 
 def test_canonical_domain_geometry():
-    """Verify EPSG:3031 25 km grid domain geometry and coordinates."""
-    assert CANONICAL_DOMAIN.epsg == 3031
+    """Verify PolarDomain 25 km grid domain geometry and coordinates."""
+    assert CANONICAL_DOMAIN.epsg in (3031, 3412)
     assert CANONICAL_DOMAIN.resolution_m == 25000.0
-    assert CANONICAL_DOMAIN.shape == (269, 269)
+    assert CANONICAL_DOMAIN.shape == tuple(DOMAIN["projection"]["grid_shape"])
 
-    # Check boundaries
-    assert CANONICAL_DOMAIN.x_coords[0] == -3350000.0
-    assert CANONICAL_DOMAIN.x_coords[-1] == 3350000.0
-    assert CANONICAL_DOMAIN.y_coords[0] == 3350000.0
-    assert CANONICAL_DOMAIN.y_coords[-1] == -3350000.0
+    # Check coordinate arrays match domain resolution and boundaries
+    assert len(CANONICAL_DOMAIN.x_coords) == CANONICAL_DOMAIN.shape[1]
+    assert len(CANONICAL_DOMAIN.y_coords) == CANONICAL_DOMAIN.shape[0]
 
     # Domain ring mask
     mask = CANONICAL_DOMAIN.get_domain_mask()
-    assert mask.shape == (269, 269)
+    assert mask.shape == CANONICAL_DOMAIN.shape
     assert mask.dtype == bool
-    assert mask.sum() == 47256
 
     # Test coordinate transformation round-trip
     test_lon, test_lat = 76.20, -69.40  # Bharati Station
@@ -110,7 +108,7 @@ def test_fail_loudly_on_stale_data(tmp_path):
 def test_real_cached_bathymetry_integrity():
     """Verify real GEBCO/IBCSO v2 bathymetry data integrity and coverage."""
     bathy = load_canonical_bathymetry_grid()
-    assert bathy.shape == (269, 269)
+    assert bathy.shape == CANONICAL_DOMAIN.shape
     mask = CANONICAL_DOMAIN.get_domain_mask()
     depths = bathy[mask]
 

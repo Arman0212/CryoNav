@@ -573,7 +573,7 @@ class RouteRequest(BaseModel):
 
 
 @app.post("/route")
-async def compute_route(req: RouteRequest):
+def compute_route(req: RouteRequest):
     """
     Compute routes with all alternatives, metrics, and rejection reasons.
     """
@@ -582,10 +582,19 @@ async def compute_route(req: RouteRequest):
     
     from src.routing.alternatives import generate_alternatives, format_comparison_for_display
     
-    # Get origin/destination grid coordinates
-    lat_grid = DS["lat"].values
-    lon_grid = DS["lon"].values
-    
+    global STATIC_GRIDS
+    if "STATIC_GRIDS" not in globals() or not STATIC_GRIDS:
+        STATIC_GRIDS = {
+            "bathy": DS["bathy"].values,
+            "land_mask": DS["land_mask"].values,
+            "lat": DS["lat"].values,
+            "lon": DS["lon"].values,
+        }
+    lat_grid = STATIC_GRIDS["lat"]
+    lon_grid = STATIC_GRIDS["lon"]
+    bathy = STATIC_GRIDS["bathy"]
+    land_mask = STATIC_GRIDS["land_mask"]
+
     # Resolve origin
     if req.origin in DOMAIN["origins"]:
         origin = DOMAIN["origins"][req.origin]
@@ -614,10 +623,7 @@ async def compute_route(req: RouteRequest):
         today_idx = int(np.argmin(np.abs(DS.time.values - depart_dt)))
     except Exception:
         raise HTTPException(400, f"Invalid departure date: {req.depart_date}. Please use YYYY-MM-DD.")
-    sic_today = DS["sic"].values[today_idx]
-    
-    bathy = DS["bathy"].values
-    land_mask = DS["land_mask"].values
+    sic_today = DS["sic"].isel(time=today_idx).values
     
     start_yx = find_approach(origin["lat"], origin["lon"], land_mask, bathy, sic_today)
     goal_yx = find_approach(dest["lat"], dest["lon"], land_mask, bathy, sic_today)
@@ -626,28 +632,30 @@ async def compute_route(req: RouteRequest):
     horizon = DOMAIN["time"]["forecast_horizon_days"]
     
     # Route across the model's forecast, initialized on the departure date.
-    # sic_fields[d] is the field the ship meets on day d+1 of the passage.
     cached = load_cached_forecast(req.depart_date, ZARR_PATH,
                                   grid_shape=_grid_shape())
     if cached is not None:
         sic_fields = cached[:horizon]
         forecast_source = "model"
     else:
-        sic_fields = np.stack([
-            DS["sic"].values[int(np.argmin(np.abs(
-                DS.time.values - (depart_dt + np.timedelta64(d + 1, "D")))))]
-            for d in range(horizon)
-        ], axis=0)
+        i0 = today_idx + 1
+        i1 = min(i0 + horizon, len(DS.time.values))
+        sic_fields = DS["sic"].isel(time=slice(i0, i1)).values
         forecast_source = "observed_fallback"
 
     # Berg risk the router actually consumes: probability of berg presence per
     # cell per day, from the same ensemble drift /bergs serves.
     try:
         from src.berg.risk_field import compute_risk_field
-        berg_results, berg_source, _ = _propagate_bergs(
-            req.depart_date, horizon, req.berg_limit)
-        berg_risk = compute_risk_field(
-            berg_results, lat_grid, lon_grid, horizon_days=horizon)
+        risk_key = ("risk_field", req.depart_date, horizon, req.berg_limit)
+        if risk_key in CACHE:
+            berg_risk, berg_source = CACHE[risk_key]
+        else:
+            berg_results, berg_source, _ = _propagate_bergs(
+                req.depart_date, horizon, req.berg_limit)
+            berg_risk = compute_risk_field(
+                berg_results, lat_grid, lon_grid, horizon_days=horizon)
+            CACHE[risk_key] = (berg_risk, berg_source)
     except Exception as e:
         print(f"  Berg risk unavailable ({type(e).__name__}: {e}); using zeros.")
         berg_risk = np.zeros_like(sic_fields)

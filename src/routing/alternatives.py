@@ -27,9 +27,9 @@ def generate_alternatives(sic_fields, berg_risk_field, bathy, land_mask,
     profiles = ROUTING["alternatives"]["profiles"]
     routes = {}
     
-    for name, profile in profiles.items():
-        print(f"  Computing route: {profile['name']}...")
-        
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _compute_single_profile(name, profile):
         # Use persistence SIC (today's field repeated) for the persistence_route
         if profile.get("use_persistence") and sic_today is not None:
             fields = np.stack([sic_today] * sic_fields.shape[0], axis=0)
@@ -57,7 +57,13 @@ def generate_alternatives(sic_fields, berg_risk_field, bathy, land_mask,
         if route["success"] and route["path_latlon"]:
             route["path_latlon_smooth"] = smooth_path(route["path_latlon"])
         
-        routes[name] = route
+        return name, route
+
+    with ThreadPoolExecutor(max_workers=min(len(profiles), 8)) as executor:
+        futures = [executor.submit(_compute_single_profile, name, profile) for name, profile in profiles.items()]
+        for f in futures:
+            name, route = f.result()
+            routes[name] = route
     
     # Build comparison table
     comparison = build_comparison_table(routes)

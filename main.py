@@ -179,11 +179,20 @@ def main():
 
     bind_host = "0.0.0.0" if args.public else args.host
     display_host = "127.0.0.1" if bind_host in ("127.0.0.1", "0.0.0.0") else bind_host
-    app_url = f"http://{display_host}:{args.port}"
-    check_url = f"http://127.0.0.1:{args.port}/"
+
+    # If the default/requested port is already occupied, automatically select the next free port
+    active_port = args.port
+    if is_port_in_use("127.0.0.1", active_port):
+        orig_port = active_port
+        while is_port_in_use("127.0.0.1", active_port):
+            active_port += 1
+        print(f"ℹ Notice: Port {orig_port} is in use. Automatically switching CryoNav to port {active_port}.\n")
+
+    app_url = f"http://{display_host}:{active_port}"
+    check_url = f"http://127.0.0.1:{active_port}/"
 
     # Print startup banner
-    print_banner(bind_host, args.port, status)
+    print_banner(bind_host, active_port, status)
 
     # Launch browser only after server is fully responding
     if not args.no_browser and not os.environ.get("CI") and not args.reload:
@@ -196,7 +205,7 @@ def main():
         uvicorn.run(
             "src.api.main:app" if args.reload else app,
             host=bind_host,
-            port=args.port,
+            port=active_port,
             reload=args.reload,
             log_level="info",
         )
