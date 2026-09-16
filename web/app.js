@@ -230,10 +230,13 @@ function switchBasemap(type) {
         map.removeLayer(basemapTileLayer);
     }
     const cfg = BASEMAP_URLS[type];
+    // Restrict requests to Web Mercator bounds and buffer tiles to avoid flashing bare background
     basemapTileLayer = L.tileLayer(cfg.url, {
         maxZoom: cfg.maxZoom,
         opacity: cfg.opacity,
-        attribution: cfg.attribution
+        attribution: cfg.attribution,
+        bounds: L.latLngBounds(L.latLng(-85.05, -180), L.latLng(85.05, 180)),
+        keepBuffer: 4,
     }).addTo(map);
     basemapTileLayer.bringToBack();
     
@@ -244,17 +247,29 @@ function switchBasemap(type) {
 }
 
 function initMap() {
+    // Enable worldCopyJump so markers remain visible when panning continuously,
+    // and clamp latitude bounds so the user cannot drag vertically off the world.
     map = L.map('map-canvas', {
         center: [-65, 50],
         zoom: 3,
-        minZoom: 2,
         maxZoom: 8,
         zoomControl: true,
         attributionControl: false,
+        worldCopyJump: true,
+        maxBounds: L.latLngBounds(L.latLng(-85.05, -Infinity), L.latLng(85.05, Infinity)),
+        maxBoundsViscosity: 1.0,
     });
     
     // Initialize with Photorealistic True-Color Satellite Imagery
     switchBasemap('satellite');
+    
+    // Viewport-derived minZoom floor to prevent page background bleed on tall screens
+    function updateMinZoom() {
+        var zoomFloor = map.getBoundsZoom(L.latLngBounds(L.latLng(-85.05, -180), L.latLng(85.05, 180)), true);
+        map.setMinZoom(Math.max(2, Math.ceil(zoomFloor)));
+    }
+    updateMinZoom();
+    map.on('resize', updateMinZoom);
     
     // Antarctic circle
     L.circle([-90, 0], {
